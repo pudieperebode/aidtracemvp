@@ -1,0 +1,428 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* ---------------------------------------------------------------------------------------------- */
+/* AidTrace design tokens, from the Figma file "Aidtrace" (color + text styles). Shared by all apps. */
+/*   Graphite      ink #292929 text, dark buttons · night #0E0E0E footer · line #EAEAEA · page #F6F6F6 */
+/*   Verdigris     brand #0E9F9A · brand-dark #0B7774 (landing ground, success) · brand-deep #053836     */
+/*   Autumn Leaf   accent #F26A1B CTA · accent-soft #FEF0E8 (active nav, pending, reject)              */
+/*   Golden Pollen pollen #FFC93C landing CTA · pollen-soft #FFFAEC (stat band, rejected)              */
+/*   In Motion     review #6A4CC7 (under review, progress bars)                                       */
+/* Font: Instrument Sans (+ DM Mono for hashes, addresses), self-hosted via @fontsource per app.      */
+/* Use token names, never hex, in components.                                                       */
+/* ---------------------------------------------------------------------------------------------- */
+
+@theme {
+	--font-sans: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+	--font-mono: "DM Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+	/* Graphite */
+	--color-ink: #292929;
+	--color-ink-soft: #3d3d3d;
+	--color-night: #0e0e0e;
+	--color-muted: #6b6b6b;
+	--color-subtle: #9a9a9a;
+	--color-line: #eaeaea;
+	--color-line-strong: #dfdfdf;
+	--color-field: #f3f3f3;
+	--color-page: #f6f6f6;
+	--color-graphite-active: #bdbdbd;
+
+	/* Verdigris (brand) */
+	--color-brand: #0e9f9a;
+	--color-brand-dark: #0b7774;
+	--color-brand-deep: #053836;
+	--color-brand-soft: #e7f5f5;
+	--color-brand-tint: #b4e1e0;
+	/* Aliases kept for shared components. */
+	--color-brand-strong: #0b7774;
+	--color-brand-ink: #0b7774;
+
+	/* Autumn Leaf (accent / CTA) */
+	--color-accent: #f26a1b;
+	--color-accent-dark: #b65014;
+	--color-accent-deep: #552509;
+	--color-accent-soft: #fef0e8;
+	--color-accent-tint: #fbd1b8;
+
+	/* Golden Pollen */
+	--color-pollen: #ffc93c;
+	--color-pollen-dark: #735a1b;
+	--color-pollen-deep: #594615;
+	--color-pollen-soft: #fffaec;
+	--color-pollen-tint: #ffeec3;
+	--color-cream: #fffaec;
+
+	/* In Motion */
+	--color-review: #6a4cc7;
+	--color-review-soft: #efebfa;
+
+	/* Feedback */
+	--color-success: #0b7774;
+	--color-success-bg: #e7f5f5;
+	--color-warning: #594615;
+	--color-warning-bg: #fffaec;
+	--color-danger: #b42318;
+	--color-danger-bg: #fdecea;
+
+	--radius-control: 5px;
+	--radius-card: 8px;
+	--radius-panel: 17px;
+
+	--ease-settle: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* shadcn primitives (dialog, select, sonner…) read these. */
+:root {
+	--radius: 8px;
+	--background: #ffffff;
+	--foreground: #292929;
+	--card: #ffffff;
+	--card-foreground: #292929;
+	--popover: #ffffff;
+	--popover-foreground: #292929;
+	--primary: #292929;
+	--primary-foreground: #ffffff;
+	--secondary: #f3f3f3;
+	--secondary-foreground: #292929;
+	--muted: #f6f6f6;
+	--muted-foreground: #6b6b6b;
+	--accent: #f3f3f3;
+	--accent-foreground: #292929;
+	--destructive: #b42318;
+	--border: #eaeaea;
+	--input: #eaeaea;
+	--ring: #0e9f9a;
+}
+
+@theme inline {
+	--radius-sm: calc(var(--radius) - 3px);
+	--radius-md: calc(var(--radius) - 2px);
+	--radius-lg: var(--radius);
+	--radius-xl: calc(var(--radius) + 4px);
+	--color-background: var(--background);
+	--color-foreground: var(--foreground);
+	--color-card: var(--card);
+	--color-card-foreground: var(--card-foreground);
+	--color-popover: var(--popover);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-primary: var(--primary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-secondary: var(--secondary);
+	--color-secondary-foreground: var(--secondary-foreground);
+	/* `muted` is AidTrace's secondary-text token (@theme above); shadcn's muted surface is `bg-page`. */
+	--color-muted-foreground: var(--muted-foreground);
+	--color-destructive: var(--destructive);
+	--color-border: var(--border);
+	--color-input: var(--input);
+	--color-ring: var(--ring);
+}
+
+@layer base {
+	* {
+		@apply border-border outline-ring/60;
+	}
+	/* No sideways panning on phones; `clip` keeps position: sticky working. */
+	html,
+	body {
+		overflow-x: hidden;
+		overflow-x: clip;
+	}
+	html {
+		scroll-behavior: smooth;
+		-webkit-text-size-adjust: 100%;
+	}
+	body {
+		@apply bg-page font-sans text-ink antialiased;
+		letter-spacing: -0.01em;
+	}
+	:focus-visible {
+		outline: 2px solid var(--color-brand);
+		outline-offset: 2px;
+	}
+	::selection {
+		background: var(--color-brand-tint);
+		color: var(--color-brand-deep);
+	}
+}
+
+/* ---------------------------------------------------------------------------------------------- */
+/* Layout + type. App screens follow the 1440 frames (24 / 16 / 14 / 12); the landing follows the   */
+/* "AidTrace Desktop" scale (85 / 60 / 57 / 37 / 26 / 23 / 20 / 17).                               */
+/* ---------------------------------------------------------------------------------------------- */
+
+@utility landing-container {
+	@apply mx-auto w-full max-w-[1304px] px-4 sm:px-6 lg:px-[81px];
+}
+
+/* Landing */
+@utility display {
+	@apply text-[46px] leading-[1.02] font-medium tracking-[-0.02em] sm:text-[64px] lg:text-[85px];
+}
+@utility h-landing {
+	@apply text-[34px] leading-[1.04] font-medium tracking-[-0.02em] sm:text-[46px] lg:text-[60px];
+}
+@utility h-landing-card {
+	@apply text-[22px] leading-[1.05] tracking-[-0.02em] sm:text-[26px] lg:text-[28px];
+}
+
+/* App */
+@utility h-page {
+	@apply text-[22px] leading-[1.1] tracking-[-0.02em] sm:text-[24px];
+}
+@utility h-section {
+	@apply text-base leading-[1.2] tracking-[-0.02em];
+}
+@utility stat-value {
+	@apply text-[20px] leading-none tracking-[-0.03em] tabular-nums min-[400px]:text-[22px] sm:text-[30px] xl:text-[34px];
+}
+@utility caption {
+	@apply text-xs leading-4 text-muted;
+}
+@utility label {
+	@apply text-xs leading-4 tracking-[0.02em] text-muted uppercase;
+}
+
+/* ---------------------------------------------------------------------------------------------- */
+/* Motion, tailored to traceability: things *arrive* (rise), money *flows* (progress fills, bars    */
+/* grow), the ledger *records* (new rows flash), confirmations *settle* (pop + drawn check), and    */
+/* waiting on the chain *pulses* (signal, trace). Loops only while waiting. Off for reduced motion. */
+/*   .animate-rise     fade + lift; stagger with style={{ "--i": n }}                               */
+/*   .animate-page     route enter (every template.tsx)                                             */
+/*   .animate-pop      a settled result (confirmed, approved, copied)                               */
+/*   .animate-signal   soft ring around a live status (processing, signing)                         */
+/*   .animate-check    draws an SVG check once                                                      */
+/*   .animate-fill     a progress bar filling to its width (funding, disbursement)                  */
+/*   .animate-bars     mini bar charts growing from the baseline                                    */
+/*   .animate-trace    a path drawing along itself (loader, flow lines)                             */
+/*   .animate-flow     dots travelling along a track (funds moving)                                 */
+/*   .animate-record   a ledger row arriving: brief brand wash that fades                           */
+/*   .reveal           landing scroll reveal (data-visible set by an observer)                      */
+/*   .shimmer          skeleton sweep                                                               */
+/* ---------------------------------------------------------------------------------------------- */
+
+@keyframes rise {
+	from {
+		opacity: 0;
+		transform: translateY(12px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+@keyframes page-in {
+	from {
+		opacity: 0;
+		transform: translateY(8px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+@keyframes pop {
+	0% {
+		opacity: 0;
+		transform: scale(0.92);
+	}
+	100% {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+@keyframes signal {
+	0% {
+		box-shadow: 0 0 0 0 color-mix(in oklab, currentColor 35%, transparent);
+	}
+	70%,
+	100% {
+		box-shadow: 0 0 0 8px color-mix(in oklab, currentColor 0%, transparent);
+	}
+}
+@keyframes check {
+	from {
+		stroke-dashoffset: 24;
+	}
+	to {
+		stroke-dashoffset: 0;
+	}
+}
+@keyframes fill {
+	from {
+		transform: scaleX(0);
+	}
+	to {
+		transform: scaleX(1);
+	}
+}
+@keyframes bars {
+	from {
+		transform: scaleY(0.1);
+	}
+	to {
+		transform: scaleY(1);
+	}
+}
+@keyframes trace {
+	0% {
+		stroke-dashoffset: var(--trace-length, 100);
+	}
+	60%,
+	75% {
+		stroke-dashoffset: 0;
+	}
+	100% {
+		stroke-dashoffset: calc(var(--trace-length, 100) * -1);
+	}
+}
+@keyframes flow {
+	from {
+		offset-distance: 0%;
+		opacity: 0;
+	}
+	15%,
+	85% {
+		opacity: 1;
+	}
+	to {
+		offset-distance: 100%;
+		opacity: 0;
+	}
+}
+@keyframes record {
+	from {
+		background-color: var(--color-brand-soft);
+	}
+	to {
+		background-color: transparent;
+	}
+}
+@keyframes shimmer {
+	from {
+		background-position: 150% 0;
+	}
+	to {
+		background-position: -50% 0;
+	}
+}
+@keyframes float {
+	0%,
+	100% {
+		transform: translateY(0);
+	}
+	50% {
+		transform: translateY(-8px);
+	}
+}
+@keyframes progress-indeterminate {
+	from {
+		transform: translateX(-100%);
+	}
+	to {
+		transform: translateX(250%);
+	}
+}
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+@keyframes marquee {
+	from {
+		transform: translateX(0);
+	}
+	to {
+		transform: translateX(-50%);
+	}
+}
+
+.shimmer {
+	background: linear-gradient(90deg, #eeeeee 25%, #f7f7f7 37%, #eeeeee 63%);
+	background-size: 400% 100%;
+}
+.reveal {
+	opacity: 1;
+}
+.animate-fill {
+	transform-origin: left center;
+}
+.animate-bars > * {
+	transform-origin: bottom center;
+	transform-box: fill-box;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.animate-rise {
+		animation: rise 0.5s var(--ease-settle) both;
+		animation-delay: calc(var(--i, 0) * 60ms);
+	}
+	.animate-page {
+		animation: page-in 0.4s var(--ease-settle) both;
+	}
+	.animate-pop {
+		animation: pop 0.32s var(--ease-settle) both;
+	}
+	.animate-signal {
+		animation: signal 1.8s ease-out infinite;
+	}
+	.animate-check {
+		stroke-dasharray: 24;
+		animation: check 0.5s 0.15s var(--ease-settle) both;
+	}
+	.animate-fill {
+		animation: fill 1.1s 0.15s var(--ease-settle) both;
+	}
+	.animate-bars > * {
+		animation: bars 0.8s var(--ease-settle) both;
+		animation-delay: calc(var(--i, 0) * 50ms + 150ms);
+	}
+	.animate-trace {
+		stroke-dasharray: var(--trace-length, 100);
+		animation: trace 2s var(--ease-settle) infinite both;
+	}
+	.animate-flow {
+		animation: flow 2.2s ease-in-out infinite both;
+		animation-delay: calc(var(--i, 0) * 0.55s);
+	}
+	.animate-record {
+		animation: record 2.4s ease-out both;
+	}
+	.animate-float {
+		animation: float 6s ease-in-out infinite;
+	}
+	.animate-spin-slow {
+		animation: spin 0.9s linear infinite;
+	}
+	.animate-progress {
+		animation: progress-indeterminate 1.4s ease-in-out infinite;
+	}
+	.animate-marquee {
+		animation: marquee 40s linear infinite;
+	}
+	.shimmer {
+		animation: shimmer 1.6s ease-in-out infinite;
+	}
+	.reveal {
+		opacity: 0;
+		transform: translateY(24px);
+		transition:
+			opacity 0.7s var(--ease-settle),
+			transform 0.7s var(--ease-settle);
+		transition-delay: calc(var(--i, 0) * 80ms);
+	}
+	.reveal[data-visible="true"] {
+		opacity: 1;
+		transform: none;
+	}
+	[data-state="open"][data-slot$="content"] {
+		animation-timing-function: var(--ease-settle);
+	}
+}
+
+.scroll-row {
+	scrollbar-width: none;
+}
+.scroll-row::-webkit-scrollbar {
+	display: none;
+}

@@ -1,0 +1,41 @@
+import Image from "next/image";
+import { AidTraceMark } from "@repo/ui/brand";
+import { cn } from "@repo/ui/lib/utils";
+import { withBasePath } from "@/lib/site";
+
+/**
+ * Wallet brand marks (Figma "Wallet choice"). The design reuses Freighter's mark for xBull, so xBull gets a neutral
+ * lettermark rather than another brand's logo; Varial (the extension and Varial Mobile) uses Varial's; the demo wallet uses the AidTrace mark.
+ */
+export function WalletIcon({ id, className }: { id: string; className?: string }) {
+	if (id === "freighter" || id === "wallet_connect" || id === "albedo") {
+		const file = id === "albedo" ? "albedo" : "varial";
+		return (
+			<Image
+				src={withBasePath(`/images/wallet-${file}.svg`)}
+				alt=""
+				width={40}
+				height={40}
+				className={cn("size-10 shrink-0 rounded-full", className)}
+			/>
+		);
+	}
+	if (id === "demo") {
+		return (
+			<span aria-hidden className={cn("flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-soft", className)}>
+				<AidTraceMark className="h-5 w-[18px] text-brand" />
+			</span>
+		);
+	}
+	return (
+		<span
+			aria-hidden
+			className={cn(
+				"flex size-10 shrink-0 items-center justify-center rounded-full bg-night text-sm tracking-[-0.04em] text-white",
+				className,
+			)}
+		>
+			xB
+		</span>
+	);
+}

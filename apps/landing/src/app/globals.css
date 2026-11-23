@@ -1,0 +1,10 @@
+@import "@repo/ui/globals.css";
+
+/* Let Tailwind scan the shared UI package for the utility classes it uses,
+   since those components live in a separate workspace package. */
+@source "../../../../packages/ui/src/**/*.{ts,tsx}";
+
+/* The fixed nav: anchor jumps (#our-work, #campaigns…) stop below it. */
+html {
+	scroll-padding-top: 88px;
+}
