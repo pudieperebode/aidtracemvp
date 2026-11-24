@@ -25,12 +25,15 @@ export function Notifier() {
 			seen.current = new Set(data.map((n) => n.id)); // first load: don't announce what's already there
 			return;
 		}
-		const fresh = data.filter((n) => !seen.current!.has(n.id) && !n.readAt);
+		const fresh = data.filter((n) => !seen.current!.has(n.id) && !n.read);
 		for (const n of data) seen.current.add(n.id);
 		if (!fresh.length) return;
-		for (const key of ["campaigns", "campaign", "beneficiaries", "reconciliation", "ledger", "wallet"]) void queryClient.invalidateQueries({ queryKey: [key] });
+		for (const key of ["campaigns", "campaign", "beneficiaries", "allocations", "ledger", "wallet"])
+			void queryClient.invalidateQueries({ queryKey: [key] });
 		for (const n of fresh.slice(0, 3)) {
-			const action = n.campaignReference ? { label: "View", onClick: () => router.push(routes.CAMPAIGN(n.campaignReference!)) } : undefined;
+			const action = n.campaign_reference
+				? { label: "View", onClick: () => router.push(routes.CAMPAIGN(n.campaign_reference!)) }
+				: undefined;
 			if (ATTENTION.has(n.event)) toast.warning(n.message, { action });
 			else toast.success(n.message, { action });
 		}

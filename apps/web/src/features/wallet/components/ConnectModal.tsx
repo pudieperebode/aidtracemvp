@@ -19,7 +19,7 @@ import {
 	detectPlatform,
 	listWallets,
 	openWalletApp,
-	signMessage,
+	signTransaction,
 	varialAppStoreUrl,
 	type Platform,
 	type WalletId,
@@ -46,7 +46,15 @@ type Phase =
  * Desktop offers the Varial extension (with an install prompt when it's missing) and Varial Mobile by QR code. Phones
  * offer Varial Mobile only: AidTrace opens the app, and if it doesn't open (most likely not installed) offers the store.
  */
-export function ConnectModal({ open, resume, onOpenChange }: { open: boolean; resume?: { address: string; walletId: WalletId }; onOpenChange?: (open: boolean) => void }) {
+export function ConnectModal({
+	open,
+	resume,
+	onOpenChange,
+}: {
+	open: boolean;
+	resume?: { address: string; walletId: WalletId };
+	onOpenChange?: (open: boolean) => void;
+}) {
 	const queryClient = useQueryClient();
 	const setConnected = useWalletStore((s) => s.setConnected);
 	const setTokens = useSession((s) => s.setTokens);
@@ -88,7 +96,7 @@ export function ConnectModal({ open, resume, onOpenChange }: { open: boolean; re
 
 	const signIn = async (address: string) => {
 		setPhase({ name: "signing", address });
-		const tokens = await login(publicApi, address, (message) => signMessage(message, address));
+		const tokens = await login(publicApi, address, (xdr, passphrase) => signTransaction(xdr, address, passphrase));
 		setTokens(address, tokens);
 		const funded = await isFundedOnTestnet(address).catch(() => null);
 		setPhase({ name: "connected", address, funded });

@@ -1,17 +1,14 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { CheckCircle2, Download, TriangleAlert } from "lucide-react";
+import { CheckCircle2, Download, ShieldCheck, TriangleAlert } from "lucide-react";
 import { Button } from "@repo/ui/button";
-import { Chip, StatCard } from "@repo/ui/surface";
-import type { CampaignTotals, ReconciliationRow } from "@repo/stellar/campaign";
+import { Chip, Notice, StatCard } from "@repo/ui/surface";
+import type { ReconciliationPayout } from "@repo/stellar/campaign";
 import { routes } from "@/lib/routes";
-import { api } from "@/lib/api/client";
-import { listLedger } from "@/lib/api/endpoints";
-import { errorMessage } from "@/lib/api/errors";
-import { fixed2, isoDay } from "@/lib/format";
+import { errorMessage, retryAfter } from "@/lib/api/errors";
+import { fixed2, isoDay, utcDateTime } from "@/lib/format";
 import { useNow } from "@/lib/clock";
 import { useToast } from "@/lib/use-toast";
 import { PageHeader } from "@/components/PageHeader";
@@ -19,12 +16,11 @@ import { DataTable, FilterSelect, Pagination, type Column } from "@/components/D
 import { EmptyState, ErrorState, StatsSkeleton } from "@/components/states";
 import { CountUp, CountUpUsd } from "@/components/Money";
 import { HashLink } from "@/components/ExplorerButton";
-import { useCampaigns } from "@/features/campaigns/hooks";
+import { CampaignPicker, useSelectedCampaign } from "@/features/campaigns/components/CampaignPicker";
 import { useLedger } from "@/features/ledger/hooks";
 import { PERIODS, TYPE_FILTERS, periodStart } from "@/features/ledger/status";
 import { TransactionsTable } from "@/features/ledger/components/TransactionsTable";
-import { useReconciliation } from "@/features/reports/hooks";
-import { campaignReportCsv, downloadCsv } from "@/features/reports/csv";
+import { useDownloadReport, useReconcile } from "@/features/reports/hooks";
 
 const PAGE = 8;
 
@@ -35,73 +31,49 @@ export interface ReportsQuery {
 	page?: number;
 }
 
-const sum = (list: CampaignTotals[]): CampaignTotals =>
-	list.reduce(
-		(a, t) => ({
-			target: (BigInt(a.target) + BigInt(t.target)).toString(),
-			raised: (BigInt(a.raised) + BigInt(t.raised)).toString(),
-			allocated: (BigInt(a.allocated) + BigInt(t.allocated)).toString(),
-			disbursed: (BigInt(a.disbursed) + BigInt(t.disbursed)).toString(),
-			available: (BigInt(a.available) + BigInt(t.available)).toString(),
-			beneficiaries_approved: a.beneficiaries_approved + t.beneficiaries_approved,
-			beneficiaries_paid: a.beneficiaries_paid + t.beneficiaries_paid,
-		}),
-		{ target: "0", raised: "0", allocated: "0", disbursed: "0", available: "0", beneficiaries_approved: 0, beneficiaries_paid: 0 },
-	);
+const asType = (t?: string) => (t === "funding" || t === "disbursement" || t === "recovery" ? t : undefined);
 
 /**
- * Screen 7 (Figma "Reports"): inflows, outflows, available balance and beneficiary payments for one campaign or all of
- * the organization's campaigns; filterable transaction history; reconciliation of allocations against confirmed
- * payouts; and a CSV export with only public-safe fields.
+ * Screen 7 (Figma "Reports"), per campaign: inflows, outflows, available balance and beneficiary payments;
+ * filterable transaction history; an on-demand reconciliation against Stellar; and the backend's CSV export
+ * (allocation references only, never names).
  */
 export function Reports({ query }: { query: ReportsQuery }) {
 	const router = useRouter();
 	const toast = useToast();
 	const now = useNow(60_000);
-	const campaigns = useCampaigns();
-	const mine = (campaigns.data?.results ?? []).filter((c) => c.status !== "draft");
-	const campaign = query.campaign ? mine.find((c) => c.reference === query.campaign) : undefined;
-	const scope = campaign ? [campaign] : mine;
-	const totals = campaigns.data ? sum(scope.map((c) => c.totals)) : undefined;
+	const campaigns = useSelectedCampaign(query.campaign);
+	const mine = campaigns.list.filter((c) => c.status !== "draft");
+	const campaign = campaigns.selected?.status === "draft" ? mine[0] : campaigns.selected;
+	const t = campaign?.totals;
 	const page = Math.max(1, query.page ?? 1);
-	const from = periodStart(query.period, now);
-	const history = useLedger({ campaign: campaign?.reference, type: query.type, from, limit: PAGE, offset: (page - 1) * PAGE }, !!campaigns.data);
-	const recon = useReconciliation(campaign?.id);
-	const [exporting, setExporting] = useState(false);
-	const set = (next: Partial<ReportsQuery>) => router.replace(routes.REPORTS({ ...query, page: undefined, ...next }), { scroll: false });
-
-	const exportCsv = async () => {
-		setExporting(true);
-		try {
-			const rows = (await Promise.all(scope.map((c) => listLedger(api, { campaign: c.reference, type: query.type, from, limit: 500 })))).flatMap((p) => p.results);
-			rows.sort((a, b) => b.timestamp - a.timestamp);
-			const label = campaign ? `${campaign.reference} · ${campaign.title}` : "All campaigns";
-			downloadCsv(`aidtrace-report-${campaign?.reference ?? "all"}-${isoDay(now)}.csv`, campaignReportCsv(label, totals!, rows, recon.data ?? []));
-			toast.success("Report downloaded", { description: `${rows.length} transactions. Beneficiary names and documents are never included.` });
-		} catch (error) {
-			toast.error("Couldn't build the report", { description: errorMessage(error) });
-		} finally {
-			setExporting(false);
-		}
-	};
-
-	const reconColumns: Column<ReconciliationRow>[] = [
-		{ key: "ref", header: "Beneficiary ref.", cell: (r) => r.beneficiary_reference, mobile: "title" },
-		{ key: "allocated", header: "Allocated (USDC)", cell: (r) => <span className="tabular-nums">{fixed2(r.allocated)}</span> },
-		{ key: "paid", header: "Paid on chain (USDC)", cell: (r) => <span className="tabular-nums">{fixed2(r.paid)}</span> },
-		{ key: "hash", header: "Transaction", cell: (r) => (r.tx_hash ? <HashLink hash={r.tx_hash} /> : <span className="caption">Not paid yet</span>) },
+	const history = useLedger(
 		{
-			key: "match",
-			header: "Reconciled",
-			cell: (r) =>
-				r.matched ? (
-					<Chip tone="success">{BigInt(r.paid) > 0n ? "Matched" : "Awaiting payout"}</Chip>
-				) : (
-					<Chip tone="danger">Mismatch</Chip>
-				),
+			campaign: campaign?.reference,
+			type: asType(query.type),
+			from: periodStart(query.period, now),
+			limit: PAGE,
+			offset: (page - 1) * PAGE,
 		},
-	];
-	const reconciled = recon.data?.filter((r) => r.matched).length ?? 0;
+		!!campaign,
+	);
+	const csv = useDownloadReport(campaign?.reference);
+	const set = (next: Partial<ReportsQuery>) =>
+		router.replace(routes.REPORTS({ ...query, page: undefined, ...next }), { scroll: false });
+
+	const exportCsv = () =>
+		csv.mutate(`aidtrace-report-${campaign!.reference}-${isoDay(now)}.csv`, {
+			onSuccess: () =>
+				toast.success("Report downloaded", {
+					description: "Allocation references only. Beneficiary names and documents are never included.",
+				}),
+			onError: (error) => {
+				const wait = retryAfter(error);
+				toast.error("Couldn't download the report", {
+					description: wait ? `Too many exports. Try again in ${wait} s.` : errorMessage(error),
+				});
+			},
+		});
 
 	return (
 		<>
@@ -109,9 +81,18 @@ export function Reports({ query }: { query: ReportsQuery }) {
 				title="Reports"
 				subtitle="Monitor campaign inflows, outflows and beneficiary payments."
 				action={
-					<Button onClick={exportCsv} isLoading={exporting} loadingText="Preparing CSV…" disabled={!totals} className="h-10">
-						<Download /> Download CSV
-					</Button>
+					<>
+						{mine.length > 1 && campaign && <CampaignPicker list={mine} selected={campaign} className="w-full sm:w-[300px]" />}
+						<Button
+							onClick={exportCsv}
+							isLoading={csv.isPending}
+							loadingText="Preparing CSV…"
+							disabled={!campaign}
+							className="h-10"
+						>
+							<Download /> Download CSV
+						</Button>
+					</>
 				}
 			/>
 
@@ -119,9 +100,9 @@ export function Reports({ query }: { query: ReportsQuery }) {
 				<div className="rounded-card bg-white">
 					<ErrorState error={campaigns.error} onRetry={() => campaigns.refetch()} />
 				</div>
-			) : !totals ? (
+			) : campaigns.isPending ? (
 				<StatsSkeleton />
-			) : mine.length === 0 ? (
+			) : !campaign || !t ? (
 				<div className="rounded-card bg-white">
 					<EmptyState
 						title="No report activity yet"
@@ -131,27 +112,43 @@ export function Reports({ query }: { query: ReportsQuery }) {
 							</Button>
 						}
 					>
-						Reports cover your registered campaigns. Create one to start tracking inflows and payouts.
+						Reports cover your published campaigns. Create one to start tracking inflows and payouts.
 					</EmptyState>
 				</div>
 			) : (
 				<>
-					<FilterSelect
-						label="Campaign"
-						className="mb-4 sm:w-[340px]"
-						value={campaign?.reference ?? ""}
-						onChange={(v) => set({ campaign: v || undefined })}
-						options={[{ value: "", label: "All campaigns" }, ...mine.map((c) => ({ value: c.reference, label: `${c.reference} · ${c.title}` }))]}
-					/>
+					<p className="caption mb-3">
+						{campaign.reference} · {campaign.title}
+					</p>
 					<div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
-						<StatCard className="animate-rise" label="Total inflows" value={<CountUpUsd stroops={totals.raised} />} caption="All contributions received" tone="review" />
-						<StatCard className="animate-rise" style={{ ["--i" as string]: 1 }} label="Total outflows" value={<CountUpUsd stroops={totals.disbursed} />} caption="All disbursements completed" tone="accent" />
-						<StatCard className="animate-rise" style={{ ["--i" as string]: 2 }} label="Available balance" value={<CountUpUsd stroops={totals.available} />} caption="USDC currently available" tone="pollen" />
+						<StatCard
+							className="animate-rise"
+							label="Total inflows"
+							value={<CountUpUsd stroops={t.raised} />}
+							caption="All funding confirmed on Stellar"
+							tone="review"
+						/>
+						<StatCard
+							className="animate-rise"
+							style={{ ["--i" as string]: 1 }}
+							label="Total outflows"
+							value={<CountUpUsd stroops={t.disbursed} />}
+							caption="All disbursements completed"
+							tone="accent"
+						/>
+						<StatCard
+							className="animate-rise"
+							style={{ ["--i" as string]: 2 }}
+							label="Available balance"
+							value={<CountUpUsd stroops={t.available} />}
+							caption={BigInt(t.recovered) > 0n ? `${fixed2(t.recovered)} USDC recovered` : "USDC currently in escrow"}
+							tone="pollen"
+						/>
 						<StatCard
 							className="animate-rise"
 							style={{ ["--i" as string]: 3 }}
 							label="Beneficiary payments"
-							value={<CountUp value={totals.beneficiaries_paid} />}
+							value={<CountUp value={t.beneficiaries_paid} />}
 							caption="Paid directly to beneficiaries"
 							tone="ink"
 						/>
@@ -161,9 +158,17 @@ export function Reports({ query }: { query: ReportsQuery }) {
 						<h2 id="history" className="h-section">
 							Transaction history
 						</h2>
-						<p className="caption mt-2">A complete record of campaign financial activity.</p>
+						<p className="caption mt-2">
+							A complete record of campaign financial activity, including pending and failed attempts.
+						</p>
 						<div className="mt-4 flex flex-col gap-2 sm:flex-row">
-							<FilterSelect label="Period" value={query.period ?? ""} onChange={(v) => set({ period: v || undefined })} options={PERIODS} className="sm:w-[150px]" />
+							<FilterSelect
+								label="Period"
+								value={query.period ?? ""}
+								onChange={(v) => set({ period: v || undefined })}
+								options={PERIODS}
+								className="sm:w-[150px]"
+							/>
 							<FilterSelect
 								label="Transaction type"
 								value={query.type ?? ""}
@@ -181,51 +186,95 @@ export function Reports({ query }: { query: ReportsQuery }) {
 							emptyBody="Nothing in this period. Try a longer period or another transaction type."
 						/>
 						{history.data && (
-							<Pagination total={history.data.total} limit={PAGE} offset={(page - 1) * PAGE} onPage={(offset) => router.replace(routes.REPORTS({ ...query, page: offset / PAGE + 1 }), { scroll: false })} />
+							<Pagination
+								total={history.data.total}
+								limit={PAGE}
+								offset={(page - 1) * PAGE}
+								onPage={(offset) => router.replace(routes.REPORTS({ ...query, page: offset / PAGE + 1 }), { scroll: false })}
+							/>
 						)}
 					</section>
 
-					<section aria-labelledby="recon" className="mt-10">
-						<div className="flex flex-wrap items-end justify-between gap-3">
-							<div>
-								<h2 id="recon" className="h-section">
-									Financial reconciliation
-								</h2>
-								<p className="caption mt-2">Allocations matched against payouts confirmed on Stellar.</p>
-							</div>
-							{campaign && recon.data && recon.data.length > 0 && (
-								<p className="flex items-center gap-2 text-xs">
-									{reconciled === recon.data.length ? (
-										<CheckCircle2 className="size-4 text-brand" aria-hidden />
-									) : (
-										<TriangleAlert className="size-4 text-accent" aria-hidden />
-									)}
-									{reconciled} of {recon.data.length} allocations reconciled
-								</p>
-							)}
-						</div>
-						{campaign ? (
-							<DataTable
-								className="mt-4"
-								caption="Reconciliation"
-								columns={reconColumns}
-								rows={recon.data?.slice(0, 50)}
-								rowKey={(r) => r.beneficiary_reference}
-								isLoading={recon.isPending}
-								error={recon.error}
-								onRetry={() => recon.refetch()}
-								empty={<EmptyState title="Nothing to reconcile yet">Allocations and payouts will be matched here.</EmptyState>}
-							/>
-						) : (
-							<div className="mt-4 rounded-card bg-white">
-								<EmptyState title="Choose a campaign" icon="search">
-									Reconciliation runs per campaign. Pick one above to match its allocations with confirmed payouts.
-								</EmptyState>
-							</div>
-						)}
-					</section>
+					<ReconciliationSection key={campaign.reference} reference={campaign.reference} />
 				</>
 			)}
 		</>
+	);
+}
+
+/** The on-demand check, per campaign (keyed by reference so a result never shows under another campaign). */
+function ReconciliationSection({ reference }: { reference: string }) {
+	const reconcile = useReconcile(reference);
+	const result = reconcile.data;
+	const unmatched = result?.payouts.filter((p) => !p.matched) ?? [];
+	const reconColumns: Column<ReconciliationPayout>[] = [
+		{ key: "ref", header: "Allocation ref.", cell: (p) => p.allocation_reference, mobile: "title" },
+		{ key: "amount", header: "Amount (USDC)", cell: (p) => <span className="tabular-nums">{fixed2(p.amount)}</span> },
+		{
+			key: "hash",
+			header: "Transaction",
+			cell: (p) => (p.tx_hash ? <HashLink hash={p.tx_hash} /> : <span className="caption">—</span>),
+		},
+		{ key: "issue", header: "Issue", cell: (p) => <Chip tone="danger">{p.issue ?? "Mismatch"}</Chip> },
+	];
+
+	return (
+		<section aria-labelledby="recon" className="mt-10">
+			<div className="flex flex-wrap items-end justify-between gap-3">
+				<div>
+					<h2 id="recon" className="h-section">
+						Financial reconciliation
+					</h2>
+					<p className="caption mt-2">Checks every confirmed payout, ledger entry and open escrow balance against Stellar.</p>
+				</div>
+				<Button
+					variant="outline"
+					className="bg-white"
+					onClick={() => reconcile.mutate()}
+					isLoading={reconcile.isPending}
+					loadingText="Checking Stellar…"
+				>
+					<ShieldCheck /> {result ? "Run again" : "Run reconciliation"}
+				</Button>
+			</div>
+			<div className="mt-4">
+				{reconcile.error ? (
+					<Notice tone="error" title="Reconciliation didn't run">
+						{retryAfter(reconcile.error)
+							? `Too many checks. Try again in ${retryAfter(reconcile.error)} s.`
+							: errorMessage(reconcile.error)}
+					</Notice>
+				) : !result ? (
+					<div className="rounded-card bg-white">
+						<EmptyState title="Not checked yet" icon="search">
+							Run a reconciliation to match this campaign&apos;s payouts and balances with what is actually on Stellar.
+						</EmptyState>
+					</div>
+				) : result.reconciled ? (
+					<Notice tone="success" title="Verified on Stellar" icon={<CheckCircle2 className="size-4" aria-hidden />}>
+						{result.payouts.length} confirmed payout{result.payouts.length === 1 ? "" : "s"} matched, with the ledger and escrow
+						balances. Checked {utcDateTime(result.checked_at)}.
+					</Notice>
+				) : (
+					<>
+						<Notice
+							tone="warning"
+							title={`${unmatched.length} payout${unmatched.length === 1 ? "" : "s"} didn't match`}
+							icon={<TriangleAlert className="size-4" aria-hidden />}
+						>
+							Checked {utcDateTime(result.checked_at)}. Review these with your team before reporting totals.
+						</Notice>
+						<DataTable
+							className="mt-4"
+							caption="Unmatched payouts"
+							columns={reconColumns}
+							rows={unmatched}
+							rowKey={(p) => p.allocation_reference}
+							empty={null}
+						/>
+					</>
+				)}
+			</div>
+		</section>
 	);
 }

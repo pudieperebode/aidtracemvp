@@ -1,21 +1,17 @@
 "use client";
 
-import { useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, publicApi } from "@/lib/api/client";
 import { getCampaign, getPublicCampaign, getPublicStats, listCampaigns, listPublicCampaigns } from "@/lib/api/endpoints";
-import { createCampaign, registerCampaign, type CreateCampaignInput } from "@/lib/api/flows";
-import { isWalletRejection } from "@/lib/api/errors";
-import type { TxStage } from "@/lib/tx";
+import { createCampaign, publishCampaign, type CreateCampaignInput } from "@/lib/api/flows";
+import { httpStatus } from "@/lib/api/errors";
 import { useSession } from "@/features/auth/store";
-import { useWalletStore } from "@/features/wallet/store";
-import { signerFor } from "@/features/wallet/signer";
 import { invalidateMoney } from "@/features/disbursements/hooks";
 
 /** Query keys shared with invalidations (see `features/disbursements/hooks.ts`). */
 export const campaignKeys = {
 	all: ["campaigns"] as const,
-	one: (id: string) => ["campaign", id] as const,
+	one: (reference: string) => ["campaign", reference] as const,
 	public: (filters: object = {}) => ["public-campaigns", filters] as const,
 	publicOne: (reference: string) => ["public-campaign", reference] as const,
 	stats: ["public-stats"] as const,
@@ -25,68 +21,67 @@ export const campaignKeys = {
 
 export const usePublicStats = () => useQuery({ queryKey: campaignKeys.stats, queryFn: () => getPublicStats(publicApi) });
 
-export const usePublicCampaigns = (filters: { featured?: boolean; status?: string; q?: string } = {}) =>
-	useQuery({ queryKey: campaignKeys.public(filters), queryFn: () => listPublicCampaigns(publicApi, { limit: 60, ...filters }), placeholderData: keepPreviousData });
+export const usePublicCampaigns = (
+	filters: {
+		status?: "active" | "funded" | "closed";
+		search?: string;
+		category?: string;
+		featured?: boolean;
+		limit?: number;
+	} = {},
+) =>
+	useQuery({
+		queryKey: campaignKeys.public(filters),
+		queryFn: () => listPublicCampaigns(publicApi, { limit: 60, ...filters }),
+		placeholderData: keepPreviousData,
+	});
 
 export const usePublicCampaign = (reference: string) =>
-	useQuery({ queryKey: campaignKeys.publicOne(reference), queryFn: () => getPublicCampaign(publicApi, reference), retry: (count, error) => count < 2 && (error as { response?: { status?: number } })?.response?.status !== 404 });
+	useQuery({
+		queryKey: campaignKeys.publicOne(reference),
+		queryFn: () => getPublicCampaign(publicApi, reference),
+		retry: (count, error) => count < 2 && httpStatus(error) !== 404,
+	});
 
 // Organization administrator ---------------------------------------------------------------------------------------
 
 export function useCampaigns() {
 	const token = useSession((s) => s.accessToken);
-	return useQuery({ queryKey: campaignKeys.all, queryFn: () => listCampaigns(api, { limit: 100 }), enabled: !!token });
+	return useQuery({ queryKey: campaignKeys.all, queryFn: () => listCampaigns(api), enabled: !!token });
 }
 
-export function useCampaign(id: string | undefined) {
+export function useCampaign(reference: string | undefined) {
 	const token = useSession((s) => s.accessToken);
-	return useQuery({ queryKey: campaignKeys.one(id ?? ""), queryFn: () => getCampaign(api, id!), enabled: !!token && !!id });
+	return useQuery({
+		queryKey: campaignKeys.one(reference ?? ""),
+		queryFn: () => getCampaign(api, reference!),
+		enabled: !!token && !!reference,
+	});
 }
 
 /**
- * Screen 2 submit: create the draft, then register it on chain with the administrator wallet (TxProgress stages).
- * A declined or failed registration leaves a draft that `useRegisterCampaign` can finish later.
+ * Screen 2 submit: create the draft, then publish it (draft → active, no signature). If publishing fails the draft
+ * is kept, and `usePublishCampaign` can finish it later.
  */
 export function useCreateCampaign() {
 	const queryClient = useQueryClient();
-	const address = useWalletStore((s) => s.address);
-	const walletId = useWalletStore((s) => s.walletId);
-	const [stage, setStage] = useState<TxStage>("idle");
-	const [draft, setDraft] = useState<{ id: string; reference: string } | null>(null);
-
-	const mutation = useMutation({
+	return useMutation({
 		mutationFn: async (input: CreateCampaignInput) => {
-			if (!address) throw new Error("Connect the administrator wallet first.");
-			setStage("signing");
-			const base = signerFor(address, walletId);
-			return createCampaign(
-				api,
-				input,
-				{
-					address,
-					sign: async (xdr, passphrase) => {
-						const signed = await base.sign(xdr, passphrase);
-						setStage("submitting");
-						return signed;
-					},
-				},
-				setDraft,
-			);
+			const draft = await createCampaign(api, input);
+			try {
+				return { campaign: await publishCampaign(api, draft.reference), published: true as const };
+			} catch (error) {
+				return { campaign: draft, published: false as const, publishError: error };
+			}
 		},
-		onSuccess: () => setStage("confirmed"),
-		onError: (error) => setStage(isWalletRejection(error) ? "rejected" : "failed"),
 		onSettled: () => invalidateMoney(queryClient),
 	});
-
-	return { ...mutation, stage, draft, reset: () => (setStage("idle"), setDraft(null), mutation.reset()) };
 }
 
-export function useRegisterCampaign() {
+export function usePublishCampaign() {
 	const queryClient = useQueryClient();
-	const address = useWalletStore((s) => s.address);
-	const walletId = useWalletStore((s) => s.walletId);
 	return useMutation({
-		mutationFn: (id: string) => registerCampaign(api, id, signerFor(address!, walletId)),
-		onSettled: (_d, _e, id) => invalidateMoney(queryClient, id),
+		mutationFn: (reference: string) => publishCampaign(api, reference),
+		onSettled: (_d, _e, reference) => invalidateMoney(queryClient, reference),
 	});
 }

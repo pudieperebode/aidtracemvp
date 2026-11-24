@@ -11,15 +11,26 @@ import { CAMPAIGN_STATUS } from "@/features/campaigns/status";
  * Featured campaign card (Figma Overview): status chip + "01 / PUBLIC CAMPAIGN", title, organization, "$72,000 raised
  * of $100,000", the purple funding bar and "View campaign".
  */
-export function CampaignCard({ campaign, index, style }: { campaign: PublicCampaign; index: number; style?: React.CSSProperties }) {
-	const status = CAMPAIGN_STATUS[campaign.status];
+export function CampaignCard({
+	campaign,
+	index,
+	style,
+}: {
+	campaign: PublicCampaign;
+	index: number;
+	style?: React.CSSProperties;
+}) {
+	const status = CAMPAIGN_STATUS[campaign.display_status];
 	const progress = fundingProgress(campaign.totals);
 	return (
-		<article className="animate-rise group relative flex min-w-0 flex-col rounded-card bg-white p-4 transition-shadow duration-300 hover:shadow-[0_18px_40px_-24px_rgba(14,14,14,0.35)] sm:p-5" style={style}>
+		<article
+			className="animate-rise group relative flex min-w-0 flex-col rounded-card bg-white p-4 transition-shadow duration-300 hover:shadow-[0_18px_40px_-24px_rgba(14,14,14,0.35)] sm:p-5"
+			style={style}
+		>
 			<div className="flex items-center justify-between gap-3">
 				<Chip tone={status.tone}>{status.label}</Chip>
-				<span className="text-[11px] tracking-[0.02em] text-ink uppercase">
-					{String(index + 1).padStart(2, "0")} / Public campaign
+				<span className="truncate text-[11px] tracking-[0.02em] text-ink uppercase">
+					{String(index + 1).padStart(2, "0")} / {campaign.featured ? "Featured" : (campaign.category ?? "Public campaign")}
 				</span>
 			</div>
 			<h3 className="mt-5 text-xl leading-tight tracking-[-0.02em] sm:text-[22px]">

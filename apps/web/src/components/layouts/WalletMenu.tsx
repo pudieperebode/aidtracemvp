@@ -9,7 +9,7 @@ import { useSignOut } from "@/features/auth/hooks";
 import { useWalletStore } from "@/features/wallet/store";
 import { useWalletBalances } from "@/features/wallet/hooks";
 import { WalletIcon } from "@/features/wallet/components/WalletIcon";
-import { FundTestnetButton } from "@/features/wallet/components/FundTestnetButton";
+import { WalletSetup } from "@/features/wallet/components/WalletSetup";
 import { AddressAvatar } from "@/components/AddressAvatar";
 
 /** The signed-in "Admin" button: short address; opens the wallet, its Testnet balances and sign-out. */
@@ -27,7 +27,11 @@ export function WalletMenu() {
 				<AddressAvatar address={address} className="size-[21px] rounded-[4px]" />
 				<span>Admin · {shortKey(address)}</span>
 			</PopoverTrigger>
-			<PopoverContent align="end" sideOffset={10} className="w-[300px] rounded-card border-line bg-white p-4 shadow-[0_24px_60px_-20px_rgba(14,14,14,0.3)]">
+			<PopoverContent
+				align="end"
+				sideOffset={10}
+				className="w-[300px] rounded-card border-line bg-white p-4 shadow-[0_24px_60px_-20px_rgba(14,14,14,0.3)]"
+			>
 				<div className="flex items-center gap-3">
 					<WalletIcon id={walletId ?? "freighter"} className="size-9" />
 					<div className="min-w-0">
@@ -40,7 +44,7 @@ export function WalletMenu() {
 					<dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
 						<div className="rounded-control bg-page p-2.5">
 							<dt className="caption">Wallet USDC</dt>
-							<dd className="mt-1 tabular-nums">{balances.data.usdc === null ? "No trustline" : fixed2(balances.data.usdc)}</dd>
+							<dd className="mt-1 tabular-nums">{balances.data.usdc === null ? "Not enabled" : fixed2(balances.data.usdc)}</dd>
 						</div>
 						<div className="rounded-control bg-page p-2.5">
 							<dt className="caption">Wallet XLM</dt>
@@ -48,12 +52,7 @@ export function WalletMenu() {
 						</div>
 					</dl>
 				)}
-				{balances.data && !balances.data.funded && (
-					<div className="mt-3">
-						<p className="caption mb-2">This account isn&apos;t on Testnet yet. Friendbot sends 10,000 test XLM (no real value).</p>
-						<FundTestnetButton address={address} />
-					</div>
-				)}
+				<WalletSetup compact className="mt-3 rounded-control border border-line p-2.5" />
 				<div className="mt-3 flex flex-col">
 					<button
 						type="button"
@@ -69,7 +68,9 @@ export function WalletMenu() {
 						type="button"
 						onClick={async () => {
 							await signOut();
-							toast.info("Signed out", { description: "Campaign funds stay in the contract. Public pages remain available." });
+							toast.info("Signed out", {
+								description: "Campaign funds stay in escrow on Stellar. Public pages remain available.",
+							});
 						}}
 						className="flex h-9 cursor-pointer items-center gap-3 rounded-control px-2 text-left text-xs text-accent-dark hover:bg-accent-soft"
 					>

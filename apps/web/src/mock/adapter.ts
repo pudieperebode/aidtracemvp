@@ -14,6 +14,7 @@ export const mockAdapter: AxiosAdapter = async (config) => {
 	const url = new URL(config.url ?? "/", "http://mock.local");
 	const path = url.pathname.replace(/^\/api\/v1/, "").replace(/\/+$/, "") || "/";
 	const params: Record<string, unknown> = { ...Object.fromEntries(url.searchParams), ...(config.params ?? {}) };
+	for (const key of Object.keys(params)) if (params[key] === undefined) delete params[key];
 	let body: unknown = config.data;
 	if (typeof body === "string") {
 		try {
@@ -22,23 +23,32 @@ export const mockAdapter: AxiosAdapter = async (config) => {
 			// leave as text
 		}
 	}
-	const headers = AxiosHeaders.from(config.headers as AxiosHeaders);
-	const auth = headers.get("Authorization");
+	const requestHeaders = AxiosHeaders.from(config.headers as AxiosHeaders);
+	const auth = requestHeaders.get("Authorization");
 	const token = typeof auth === "string" && auth.startsWith("Bearer ") ? auth.slice(7) : null;
+	const headers: Record<string, string> = {};
+	for (const [key, value] of Object.entries(requestHeaders.toJSON()))
+		if (typeof value === "string") headers[key.toLowerCase()] = value;
 
-	await latency(method === "GET" ? "read" : "write");
-	const result = handle({ method, path, params, body, token });
+	await latency(method === "GET" ? "read" : path.endsWith("/submit") ? "sign" : "write");
+	const result = handle({ method, path, params, body, token, headers });
 
 	const response: AxiosResponse = {
-		data: result.body,
+		data: result.status === 204 ? "" : result.body,
 		status: result.status,
 		statusText: result.status < 400 ? "OK" : "Error",
-		headers: {},
+		headers: result.headers ?? {},
 		config,
 		request: { mock: true },
 	};
 	if (result.status >= 400) {
-		throw new AxiosError((result.body as { message?: string }).message ?? "Request failed", result.status >= 500 ? "ERR_BAD_RESPONSE" : "ERR_BAD_REQUEST", config, response.request, response);
+		throw new AxiosError(
+			(result.body as { message?: string }).message ?? "Request failed",
+			result.status >= 500 ? "ERR_BAD_RESPONSE" : "ERR_BAD_REQUEST",
+			config,
+			response.request,
+			response,
+		);
 	}
 	return response;
 };

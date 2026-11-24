@@ -7,6 +7,7 @@ import type { TxStage } from "@/lib/tx";
 import { errorMessage } from "@/lib/api/errors";
 import { TxProgress } from "@/components/TxProgress";
 import { HashBox } from "@/components/ExplorerButton";
+import { failureHint } from "@/components/FailureHint";
 
 /**
  * The modal for one wallet-signed action: a form while idle, then the TxProgress steps, then the result (confirmed
@@ -20,6 +21,7 @@ export function TxDialog({
 	stage,
 	error,
 	hash,
+	explorerUrl,
 	children,
 	successTitle = "Confirmed on Stellar",
 	successBody,
@@ -32,6 +34,8 @@ export function TxDialog({
 	stage: TxStage;
 	error?: unknown;
 	hash?: string | null;
+	/** The explorer link the backend returned for `hash`. */
+	explorerUrl?: string | null;
 	/** The form shown while idle. */
 	children: React.ReactNode;
 	successTitle?: string;
@@ -41,7 +45,11 @@ export function TxDialog({
 	const busy = stage === "signing" || stage === "submitting";
 	return (
 		<Dialog open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
-			<DialogContent showCloseButton={!busy} className="gap-0 rounded-panel border-0 bg-white p-5 sm:max-w-[480px] sm:p-7" onPointerDownOutside={(e) => busy && e.preventDefault()}>
+			<DialogContent
+				showCloseButton={!busy}
+				className="gap-0 rounded-panel border-0 bg-white p-5 sm:max-w-[480px] sm:p-7"
+				onPointerDownOutside={(e) => busy && e.preventDefault()}
+			>
 				<DialogTitle className="text-lg font-normal tracking-[-0.02em]">{title}</DialogTitle>
 				{description && <DialogDescription className="mt-2 text-xs leading-5 text-muted">{description}</DialogDescription>}
 
@@ -58,7 +66,7 @@ export function TxDialog({
 								{hash && (
 									<div className="mt-3">
 										<p className="caption mb-1.5">Transaction hash</p>
-										<HashBox hash={hash} />
+										<HashBox hash={hash} href={explorerUrl} />
 									</div>
 								)}
 							</div>
@@ -66,6 +74,13 @@ export function TxDialog({
 						{stage === "failed" && (
 							<Notice tone="error" title="Transaction failed" className="animate-pop mt-6">
 								{errorMessage(error)}
+								{failureHint(error)}
+							</Notice>
+						)}
+						{stage === "pending" && (
+							<Notice tone="warning" title="Still confirming" className="animate-pop mt-6">
+								The outcome isn&apos;t known yet. AidTrace keeps checking Stellar and updates balances once it settles. Don&apos;t
+								send it again.
 							</Notice>
 						)}
 						<div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

@@ -7,9 +7,15 @@ import type { TxStage } from "@/lib/tx";
 
 const STEPS = [
 	{ key: "signing", label: "Approve in your wallet", hint: "Check the campaign, amount and Testnet network before signing." },
-	{ key: "submitting", label: "Recording on Stellar", hint: "Waiting for the ledger to close and the contract to confirm (about 5 seconds)." },
+	{
+		key: "submitting",
+		label: "Recording on Stellar",
+		hint: "AidTrace submits the signed transaction and waits for the ledger to close (about 5 seconds).",
+	},
 	{ key: "confirmed", label: "Confirmed on chain", hint: "Verified on Stellar. Balances and the public ledger are updated." },
 ] as const;
+
+const PENDING_HINT = "Still confirming on Stellar. AidTrace keeps checking, even if you close this window. Don't send it again.";
 
 /**
  * The pending → confirmed treatment shared by every wallet-signed action: three steps with the current one live,
@@ -17,7 +23,14 @@ const STEPS = [
  * appears after the backend verified the transaction.
  */
 export function TxProgress({ stage, failureText, className }: { stage: TxStage; failureText?: string; className?: string }) {
-	const index = stage === "signing" || stage === "rejected" ? 0 : stage === "submitting" || stage === "failed" ? 1 : stage === "confirmed" ? 2 : -1;
+	const index =
+		stage === "signing" || stage === "rejected"
+			? 0
+			: stage === "submitting" || stage === "failed" || stage === "pending"
+				? 1
+				: stage === "confirmed"
+					? 2
+					: -1;
 	const stopped = stage === "rejected" || stage === "failed";
 
 	return (
@@ -28,17 +41,33 @@ export function TxProgress({ stage, failureText, className }: { stage: TxStage; 
 				return (
 					<li key={step.key} className={cn("relative flex gap-3 transition-opacity duration-300", i > index && "opacity-40")}>
 						{i < STEPS.length - 1 && (
-							<span aria-hidden className={cn("absolute top-7 left-[13px] h-[calc(100%-12px)] w-px", done ? "bg-brand" : "bg-line")} />
+							<span
+								aria-hidden
+								className={cn("absolute top-7 left-[13px] h-[calc(100%-12px)] w-px", done ? "bg-brand" : "bg-line")}
+							/>
 						)}
 						<span
 							className={cn(
 								"relative mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full",
-								done ? "bg-brand text-white" : current && stopped ? "bg-accent-soft text-accent-deep" : current ? "bg-brand-soft text-brand-dark" : "bg-field text-muted",
+								done
+									? "bg-brand text-white"
+									: current && stopped
+										? "bg-accent-soft text-accent-deep"
+										: current
+											? "bg-brand-soft text-brand-dark"
+											: "bg-field text-muted",
 							)}
 						>
 							{done ? (
 								<svg viewBox="0 0 24 24" className="size-4" fill="none" aria-hidden>
-									<path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" className="animate-check" />
+									<path
+										d="M5 12.5l4.5 4.5L19 7.5"
+										stroke="currentColor"
+										strokeWidth="2.6"
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										className="animate-check"
+									/>
 								</svg>
 							) : current && stopped ? (
 								<X className="size-4" aria-hidden />
@@ -52,7 +81,13 @@ export function TxProgress({ stage, failureText, className }: { stage: TxStage; 
 							<span className="block text-[13px]">{step.label}</span>
 							{(current || (done && i === 2)) && (
 								<span className="caption mt-0.5 block">
-									{current && stopped ? (stage === "rejected" ? "Declined in your wallet. Nothing was submitted." : (failureText ?? "This step didn't complete. No funds moved.")) : step.hint}
+									{current && stopped
+										? stage === "rejected"
+											? "Declined in your wallet. Nothing was submitted."
+											: (failureText ?? "This step didn't complete. No funds moved.")
+										: current && stage === "pending"
+											? PENDING_HINT
+											: step.hint}
 								</span>
 							)}
 						</span>

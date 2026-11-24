@@ -29,6 +29,8 @@ export const routes = {
 	CAMPAIGN: (reference: string) => `/campaigns/${encodeURIComponent(reference)}`,
 	/** Beneficiary application (public half of Screen 3). */
 	APPLY: (reference: string) => `/campaigns/${encodeURIComponent(reference)}/apply`,
+	/** The applicant's private status page. The emailed link adds `#token=…` (a fragment: never sent to a server). */
+	APPLICATION_STATUS: "/applications/status",
 	/** Screen 3 */
 	BENEFICIARIES: (filters: Query = {}) => `/beneficiaries${qs(filters)}`,
 	/** Screen 4 */

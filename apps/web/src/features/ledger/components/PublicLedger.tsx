@@ -10,10 +10,13 @@ import { PageHeader } from "@/components/PageHeader";
 import { FilterSelect, Pagination } from "@/components/DataTable";
 import { useLedger } from "@/features/ledger/hooks";
 import { useFreshIds } from "@/features/ledger/fresh";
-import { PERIODS, STATUS_FILTERS, TYPE_FILTERS, periodStart } from "@/features/ledger/status";
+import { PERIODS, PRIVACY_NOTICE, STATUS_FILTERS, TYPE_FILTERS, periodStart } from "@/features/ledger/status";
 import { TransactionsTable } from "@/features/ledger/components/TransactionsTable";
 
 const PAGE = 8;
+
+const asType = (t?: string) => (t === "funding" || t === "disbursement" || t === "recovery" ? t : undefined);
+const asStatus = (s?: string) => (s === "confirmed" || s === "pending" || s === "failed" ? s : undefined);
 
 export interface LedgerQuery {
 	campaign?: string;
@@ -35,15 +38,16 @@ export function PublicLedger({ query }: { query: LedgerQuery }) {
 	const page = Math.max(1, query.page ?? 1);
 	const ledger = useLedger({
 		campaign: query.campaign,
-		type: query.type,
-		status: query.status,
-		q: query.q,
+		type: asType(query.type),
+		status: asStatus(query.status),
+		search: query.q,
 		from: periodStart(query.period, now),
 		limit: PAGE,
 		offset: (page - 1) * PAGE,
 	});
 	const fresh = useFreshIds(ledger.data?.results);
-	const set = (next: Partial<LedgerQuery>) => router.replace(routes.LEDGER({ ...query, page: undefined, ...next }), { scroll: false });
+	const set = (next: Partial<LedgerQuery>) =>
+		router.replace(routes.LEDGER({ ...query, page: undefined, ...next }), { scroll: false });
 	const filtered = !!(query.campaign || query.type || query.status || query.q || query.period);
 
 	return (
@@ -61,13 +65,31 @@ export function PublicLedger({ query }: { query: LedgerQuery }) {
 					key={query.q ?? ""}
 					name="q"
 					defaultValue={query.q}
-					placeholder="Search reference or transaction hash"
-					aria-label="Search reference or transaction hash"
+					placeholder="Search hash, reference or campaign"
+					aria-label="Search by transaction hash, campaign or recipient reference, or campaign title"
 					className="sm:col-span-2 lg:w-[290px]"
 				/>
-				<FilterSelect label="Type" value={query.type ?? ""} onChange={(v) => set({ type: v || undefined })} options={TYPE_FILTERS} className="lg:w-[175px]" />
-				<FilterSelect label="Status" value={query.status ?? ""} onChange={(v) => set({ status: v || undefined })} options={STATUS_FILTERS} className="lg:w-[175px]" />
-				<FilterSelect label="Period" value={query.period ?? ""} onChange={(v) => set({ period: v || undefined })} options={PERIODS} className="sm:col-span-2 lg:w-[175px]" />
+				<FilterSelect
+					label="Type"
+					value={query.type ?? ""}
+					onChange={(v) => set({ type: v || undefined })}
+					options={TYPE_FILTERS}
+					className="lg:w-[175px]"
+				/>
+				<FilterSelect
+					label="Status"
+					value={query.status ?? ""}
+					onChange={(v) => set({ status: v || undefined })}
+					options={STATUS_FILTERS}
+					className="lg:w-[175px]"
+				/>
+				<FilterSelect
+					label="Period"
+					value={query.period ?? ""}
+					onChange={(v) => set({ period: v || undefined })}
+					options={PERIODS}
+					className="sm:col-span-2 lg:w-[175px]"
+				/>
 				{filtered && (
 					<Button type="button" variant="ghost" className="h-10" onClick={() => router.replace(routes.LEDGER())}>
 						Clear
@@ -89,13 +111,28 @@ export function PublicLedger({ query }: { query: LedgerQuery }) {
 				onRetry={() => ledger.refetch()}
 				freshIds={fresh}
 				emptyTitle={filtered ? "No transactions to display" : "No transactions yet"}
-				emptyBody={filtered ? "Try a different search, type, status or period." : "Funding and payouts will appear here as soon as they're confirmed on Stellar."}
+				emptyBody={
+					filtered
+						? "Try a different search, type, status or period."
+						: "Funding and payouts will appear here as soon as they're submitted to Stellar."
+				}
 			/>
-			{ledger.data && <Pagination total={ledger.data.total} limit={PAGE} offset={(page - 1) * PAGE} onPage={(offset) => router.replace(routes.LEDGER({ ...query, page: offset / PAGE + 1 }), { scroll: false })} />}
+			<p className="caption mt-3">
+				Pending and failed rows are attempts submitted to Stellar. A failed one moved no funds, and totals count confirmed
+				transactions only.
+			</p>
+			{ledger.data && (
+				<Pagination
+					total={ledger.data.total}
+					limit={PAGE}
+					offset={(page - 1) * PAGE}
+					onPage={(offset) => router.replace(routes.LEDGER({ ...query, page: offset / PAGE + 1 }), { scroll: false })}
+				/>
+			)}
 
 			<Notice tone="info" title="Privacy-safe by design" className="mt-8">
-				Recipients appear only as references (BNF-…); names and documents are never published. Stellar transactions and wallet addresses are publicly observable,
-				so anyone can verify these payments independently on Stellar Expert.
+				{PRIVACY_NOTICE} Recipients appear only as a random allocation reference (ALC-…), and anyone can verify these payments
+				independently on Stellar Expert.
 			</Notice>
 		</>
 	);

@@ -11,7 +11,7 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@repo/ui/sheet";
 import { routes } from "@/lib/routes";
 import { useHydrated } from "@/lib/hydrated";
 import { IS_MOCK } from "@/lib/mode";
-import { useIsAdmin } from "@/features/auth/hooks";
+import { useIsSignedIn } from "@/features/auth/hooks";
 import { useSignInDialog } from "@/features/auth/dialog";
 import { SignInDialog } from "@/features/auth/components/SignInDialog";
 import { SidebarNav } from "@/components/layouts/Sidebar";
@@ -33,8 +33,11 @@ function crumbs(pathname: string): string[] {
 	if (first === "campaigns") {
 		if (!second) return ["Home", "Campaigns"];
 		if (second === "new") return ["Home", "Campaigns", "Create campaign"];
-		return third === "apply" ? ["Home", "Campaigns", decodeURIComponent(second), "Apply"] : ["Home", "Campaigns", decodeURIComponent(second)];
+		return third === "apply"
+			? ["Home", "Campaigns", decodeURIComponent(second), "Apply"]
+			: ["Home", "Campaigns", decodeURIComponent(second)];
 	}
+	if (first === "applications") return ["Home", "Your application"];
 	return ["Home", "Campaigns", name[first ?? ""] ?? "Overview"];
 }
 
@@ -46,11 +49,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 	const pathname = usePathname();
 	const router = useRouter();
 	const hydrated = useHydrated();
-	const isAdmin = useIsAdmin();
+	const isSignedIn = useIsSignedIn();
 	const signInOpen = useSignInDialog((s) => s.open);
 	const setSignInOpen = useSignInDialog((s) => s.setOpen);
 	const [menuOpen, setMenuOpen] = useState(false);
-	const signedIn = hydrated && isAdmin;
+	const signedIn = hydrated && isSignedIn;
 
 	// The live wallet modal finishes by connecting the wallet; close the dialog once the session exists.
 	useEffect(() => {
@@ -66,7 +69,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 				router.push(routes.LEDGER(q ? { q } : {}));
 			}}
 		>
-			<SearchInput name="q" tone="field" placeholder="Search campaigns or transactions" aria-label="Search campaigns or transactions" className="h-[30px] w-[246px]" />
+			<SearchInput
+				name="q"
+				tone="field"
+				placeholder="Search campaigns or transactions"
+				aria-label="Search campaigns or transactions"
+				className="h-[30px] w-[246px]"
+			/>
 		</form>
 	);
 
@@ -82,7 +91,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
 	return (
 		<div className="min-h-dvh bg-page">
-			<a href="#main" className="sr-only z-[100] rounded-control bg-ink px-4 py-2 text-white focus:not-sr-only focus:fixed focus:top-3 focus:left-3">
+			<a
+				href="#main"
+				className="sr-only z-[100] rounded-control bg-ink px-4 py-2 text-white focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
+			>
 				Skip to content
 			</a>
 			<header className="sticky top-0 z-40 flex h-16 items-center border-b border-line bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85">
@@ -95,7 +107,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 							{trail.map((c, i) => (
 								<li key={`${c}-${i}`} className="flex items-center gap-1.5">
 									{i > 0 && <span aria-hidden>/</span>}
-									<span aria-current={i === trail.length - 1 ? "page" : undefined} className={i === trail.length - 1 ? "text-ink" : "text-ink/80"}>
+									<span
+										aria-current={i === trail.length - 1 ? "page" : undefined}
+										className={i === trail.length - 1 ? "text-ink" : "text-ink/80"}
+									>
 										{c}
 									</span>
 								</li>
@@ -107,22 +122,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 						{signedIn ? (
 							<NotificationsBell />
 						) : (
-							<span className="hidden size-9 items-center justify-center text-ink/40 sm:flex" title="Sign in to see notifications">
+							<span
+								className="hidden size-9 items-center justify-center text-ink/40 sm:flex"
+								title="Sign in to see notifications"
+							>
 								<Bell className="size-4" strokeWidth={1.5} aria-hidden />
 							</span>
 						)}
 						<div className="hidden sm:block">{account}</div>
 						<Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-							<SheetTrigger className="flex size-9 cursor-pointer items-center justify-center rounded-control hover:bg-field lg:hidden" aria-label="Open menu">
+							<SheetTrigger
+								className="flex size-9 cursor-pointer items-center justify-center rounded-control hover:bg-field lg:hidden"
+								aria-label="Open menu"
+							>
 								<Menu className="size-5" strokeWidth={1.5} />
 							</SheetTrigger>
 							<SheetContent>
 								<SheetTitle className="flex h-16 shrink-0 items-center border-b border-line px-5">
 									<AidTraceLogo />
 								</SheetTitle>
-								<div className="flex flex-col gap-3 border-b border-line px-5 py-4 sm:hidden">
-									{account}
-								</div>
+								<div className="flex flex-col gap-3 border-b border-line px-5 py-4 sm:hidden">{account}</div>
 								<div className="border-b border-line px-5 py-4 md:hidden">{search}</div>
 								<div className="min-h-0 flex-1 overflow-y-auto">
 									<SidebarNav onNavigate={() => setMenuOpen(false)} />

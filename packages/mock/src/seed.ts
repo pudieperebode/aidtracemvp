@@ -1,88 +1,101 @@
 /**
- * Mock data for AidTrace, used until the backend is connected (NEXT_PUBLIC_DATA_MODE=mock). Deterministic: the same
- * seed always produces the same campaigns, beneficiaries and ledger, with numbers taken from the Figma frames
- * ("Clean water for every family": 72,000 of 100,000 USDC raised, 94 of 400 beneficiaries paid).
+ * Mock data for AidTrace, used until the app runs against the backend (NEXT_PUBLIC_DATA_MODE=mock). Deterministic: the
+ * same seed always produces the same campaigns, beneficiaries, allocations and ledger, with numbers taken from the
+ * Figma frames ("Clean water for every family": 72,000 of 100,000 USDC raised, 94 of 400 beneficiaries paid).
  *
- * Rows are stored the way a backend would: amounts as stroop strings (7 decimals), times as ISO strings. Totals are
- * never stored; `campaignTotals()` derives them from confirmed ledger rows and allocations, so they always reconcile.
+ * Rows mirror the AidTrace backend: campaigns keyed by reference (`AT-1001`), beneficiaries `BNF-…`, allocations with a
+ * random public `ALC-…` reference, and a ledger of submitted transactions (confirmed, pending or failed). Amounts are
+ * stroop strings (7 decimals), times ISO strings. Totals are never stored; `campaignTotals()` derives them from
+ * confirmed rows only, so they always reconcile.
  */
 import { mockAccountId } from "@repo/stellar/strkey";
 
-export type CampaignCategory = "water" | "food" | "education" | "health";
-export type CampaignStatusRow = "draft" | "active" | "funded" | "closed" | "cancelled";
-export type BeneficiaryStatusRow = "registered" | "under_review" | "approved" | "rejected" | "allocated" | "paid";
-export type PaymentStatusRow = "pending_allocation" | "allocated" | "ready" | "processing" | "confirmed" | "failed" | "cancelled";
+export type CampaignStatusRow = "draft" | "active" | "closed" | "cancelled";
+export type BeneficiaryStatusRow = "registered" | "under_review" | "approved" | "rejected";
+export type AllocationStatusRow = "allocated" | "ready" | "processing" | "confirmed" | "failed" | "cancelled";
 
 export interface OrgRow {
 	id: string;
 	name: string;
-	website: string;
+	description: string | null;
+	websiteUrl: string | null;
 	adminWallet: string;
 	createdAt: string;
 }
 
 export interface CampaignRow {
-	id: string;
 	reference: string;
 	title: string;
 	description: string;
-	category: CampaignCategory;
+	eligibilityRequirements: string;
+	category: string | null;
+	featured: boolean;
 	organizationId: string;
 	adminWallet: string;
 	target: string;
 	maxAllocation: string;
 	beneficiaryTarget: number;
-	eligibility: string[];
 	startsAt: string;
 	endsAt: string;
 	status: CampaignStatusRow;
-	contractCampaignId: string | null;
-	featured: boolean;
 	createdAt: string;
+	updatedAt: string;
 }
 
 export interface EvidenceRow {
 	id: string;
 	name: string;
 	contentType: string;
-	size: number;
-	uploadedAt: string;
-}
-
-export interface AllocationRow {
-	id: string;
-	amount: string;
-	status: PaymentStatusRow;
-	txHash: string | null;
-	failureReason: string | null;
-	updatedAt: string;
+	sizeBytes: number;
+	sha256: string;
+	createdAt: string;
 }
 
 export interface BeneficiaryRow {
 	id: string;
 	reference: string;
-	campaignId: string;
-	name: string;
-	wallet: string;
-	eligibilityNotes: string;
+	campaignReference: string;
+	fullName: string;
+	email: string | null;
+	phone: string | null;
+	walletAddress: string;
+	eligibilityDetails: string;
+	reviewNote: string | null;
 	evidence: EvidenceRow[];
 	status: BeneficiaryStatusRow;
-	reviewedBy: string | null;
 	reviewedAt: string | null;
-	rejectionReason: string | null;
-	allocation: AllocationRow | null;
+	createdAt: string;
+	updatedAt: string;
+	/** The applicant's private status-link token (emailed by the real backend). */
+	statusToken: string;
+}
+
+export interface AllocationRow {
+	id: string;
+	/** Random public reference: the only recipient identifier on the public ledger. */
+	reference: string;
+	campaignReference: string;
+	beneficiaryId: string;
+	amount: string;
+	status: AllocationStatusRow;
+	payoutTxHash: string | null;
+	paidAt: string | null;
+	cancelledAt: string | null;
+	failureMessage: string | null;
 	createdAt: string;
 }
 
+/** A transaction submitted to Stellar. Only `confirmed` rows move money or count in totals. */
 export interface LedgerRow {
 	id: string;
-	campaignId: string;
 	campaignReference: string;
-	type: "funding" | "disbursement";
+	type: "funding" | "disbursement" | "recovery";
 	amount: string;
-	status: "pending" | "processing" | "confirmed" | "failed";
-	counterpartyRef: string;
+	status: "confirmed" | "pending" | "failed";
+	recipientReference: string | null;
 	txHash: string;
+	ledger: number | null;
+	failureCode: string | null;
 	timestamp: string;
 }
 
@@ -90,7 +103,7 @@ export interface NotificationRow {
 	id: string;
 	event: string;
 	message: string;
-	campaignId: string | null;
+	campaignReference: string | null;
 	readAt: string | null;
 	createdAt: string;
 }
@@ -100,14 +113,17 @@ export interface MockDb {
 	orgs: OrgRow[];
 	campaigns: CampaignRow[];
 	beneficiaries: BeneficiaryRow[];
+	allocations: AllocationRow[];
 	ledger: LedgerRow[];
 	notifications: NotificationRow[];
-	/** Monotonic counters for references. */
-	counters: { beneficiary: number; campaign: number; id: number };
+	/** The demo administrator wallet's Testnet USDC (stroops). */
+	walletUsdc: string;
+	/** Monotonic counters for references and ids. */
+	counters: { beneficiary: number; campaign: number; id: number; ledger: number };
 }
 
 /** Bump when the seed's shape changes: stored demo data with an older version is replaced. */
-export const SEED_VERSION = 4;
+export const SEED_VERSION = 6;
 
 /** The demo organization administrator. Mock data only: there is no secret key behind this address. */
 export const DEMO_ADMIN_WALLET = mockAccountId("aidtrace-demo-admin");
@@ -139,8 +155,70 @@ export function mockTxHash(seed: string) {
 	return out.slice(0, 64);
 }
 
-const FIRST = ["Amara", "Daniel", "Grace", "Joseph", "Fatima", "Kwame", "Aisha", "Samuel", "Ngozi", "Ibrahim", "Esther", "Musa", "Chiamaka", "Peter", "Halima", "Yaw", "Blessing", "Tunde", "Zainab", "David", "Mercy", "Emeka", "Rukayat", "John", "Adaeze", "Moses", "Hauwa", "Kofi", "Ruth", "Abdul"];
-const LAST = ["Okafor", "Mensah", "Adebayo", "Kamau", "Hassan", "Boateng", "Bello", "Otieno", "Eze", "Abubakar", "Nwosu", "Wanjiru", "Danjuma", "Owusu", "Akinola", "Mwangi", "Ibrahim", "Achieng", "Obi", "Sule"];
+const BASE32 = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+/** A random-looking public allocation reference ("ALC-7KQ2M9"), deterministic per seed string. */
+export function allocationReference(seed: string) {
+	const hex = mockTxHash(`alc:${seed}`);
+	let out = "";
+	for (let i = 0; i < 6; i++) out += BASE32[parseInt(hex.slice(i * 2, i * 2 + 2), 16) % BASE32.length];
+	return `ALC-${out}`;
+}
+
+const FIRST = [
+	"Amara",
+	"Daniel",
+	"Grace",
+	"Joseph",
+	"Fatima",
+	"Kwame",
+	"Aisha",
+	"Samuel",
+	"Ngozi",
+	"Ibrahim",
+	"Esther",
+	"Musa",
+	"Chiamaka",
+	"Peter",
+	"Halima",
+	"Yaw",
+	"Blessing",
+	"Tunde",
+	"Zainab",
+	"David",
+	"Mercy",
+	"Emeka",
+	"Rukayat",
+	"John",
+	"Adaeze",
+	"Moses",
+	"Hauwa",
+	"Kofi",
+	"Ruth",
+	"Abdul",
+];
+const LAST = [
+	"Okafor",
+	"Mensah",
+	"Adebayo",
+	"Kamau",
+	"Hassan",
+	"Boateng",
+	"Bello",
+	"Otieno",
+	"Eze",
+	"Abubakar",
+	"Nwosu",
+	"Wanjiru",
+	"Danjuma",
+	"Owusu",
+	"Akinola",
+	"Mwangi",
+	"Ibrahim",
+	"Achieng",
+	"Obi",
+	"Sule",
+];
 const NOTES = [
 	"Household of six without a protected water source within 2 km. Assessed by the community field officer.",
 	"Single-parent household; income below the program threshold. Referral letter from the local clinic attached.",
@@ -163,96 +241,124 @@ interface CampaignPlan {
 	reference: string;
 	title: string;
 	description: string;
-	category: CampaignCategory;
-	org: { name: string; website: string };
+	org: { name: string; description: string; websiteUrl: string };
+	category: string;
+	featured: boolean;
 	target: number;
 	maxAllocation: number;
 	beneficiaryTarget: number;
-	eligibility: string[];
+	eligibility: string;
 	startDaysAgo: number;
 	durationDays: number;
 	status: CampaignStatusRow;
-	featured: boolean;
 	raised: number;
-	counts: { paid: number; ready: number; approved: number; registered: number; under_review: number; rejected: number; failed?: number };
+	counts: {
+		paid: number;
+		ready: number;
+		allocated: number;
+		failed: number;
+		approved: number;
+		registered: number;
+		under_review: number;
+		rejected: number;
+	};
 }
 
 const PLANS: CampaignPlan[] = [
 	{
-		reference: "CMP-2026-001",
+		reference: "AT-1001",
 		title: "Clean water for every family",
 		description:
 			"Bringing safe, reliable drinking water to households in rural communities. Funds cover household water filters, borehole repairs and hygiene kits, paid directly to verified beneficiaries in USDC.",
-		category: "water",
-		org: { name: "Water for All Foundation", website: "https://waterforall.org" },
+		org: {
+			name: "Water for All Foundation",
+			description: "Safe water and sanitation for rural communities.",
+			websiteUrl: "https://waterforall.org",
+		},
+		category: "Clean water",
+		featured: true,
 		target: 100_000,
 		maxAllocation: 250,
 		beneficiaryTarget: 400,
-		eligibility: ["Households without access to clean water within 2 km", "Resident in a partner community", "Not receiving support from another water program"],
+		eligibility:
+			"Households without access to clean water within 2 km.\nResident in a partner community.\nNot receiving support from another water program.",
 		startDaysAgo: 82,
 		durationDays: 120,
 		status: "active",
-		featured: true,
 		raised: 72_000,
-		counts: { paid: 94, ready: 2, approved: 6, registered: 8, under_review: 3, rejected: 2, failed: 1 },
+		counts: { paid: 94, ready: 2, allocated: 1, failed: 1, approved: 6, registered: 8, under_review: 3, rejected: 2 },
 	},
 	{
-		reference: "CMP-2026-002",
+		reference: "AT-1002",
 		title: "Community emergency relief",
 		description:
 			"Rapid cash support for families affected by seasonal flooding: food, shelter repairs and essentials, distributed transparently to approved households.",
-		category: "food",
-		org: { name: "Community Relief Network", website: "https://communityrelief.network" },
+		org: {
+			name: "Water for All Foundation",
+			description: "Safe water and sanitation for rural communities.",
+			websiteUrl: "https://waterforall.org",
+		},
+		category: "Emergency relief",
+		featured: true,
 		target: 50_000,
 		maxAllocation: 200,
 		beneficiaryTarget: 250,
-		eligibility: ["Household listed in the district flood assessment", "Lost shelter, crops or livelihood in the last 90 days"],
+		eligibility: "Household listed in the district flood assessment.\nLost shelter, crops or livelihood in the last 90 days.",
 		startDaysAgo: 45,
 		durationDays: 90,
 		status: "active",
-		featured: true,
 		raised: 34_500,
-		counts: { paid: 60, ready: 0, approved: 5, registered: 6, under_review: 2, rejected: 1 },
+		counts: { paid: 60, ready: 0, allocated: 0, failed: 0, approved: 5, registered: 6, under_review: 2, rejected: 1 },
 	},
 	{
-		reference: "CMP-2026-003",
+		reference: "AT-1003",
 		title: "A brighter start for students",
-		description: "Covering school fees, uniforms and learning materials for students from low-income households, paid to guardians' wallets each term.",
-		category: "education",
-		org: { name: "Future First Initiative", website: "https://futurefirst.org" },
+		description:
+			"Covering school fees, uniforms and learning materials for students from low-income households, paid to guardians' wallets each term.",
+		org: {
+			name: "Water for All Foundation",
+			description: "Safe water and sanitation for rural communities.",
+			websiteUrl: "https://waterforall.org",
+		},
+		category: "Education",
+		featured: true,
 		target: 25_000,
 		maxAllocation: 150,
 		beneficiaryTarget: 160,
-		eligibility: ["Enrolled in a partner primary or secondary school", "Household income below the program threshold"],
+		eligibility: "Enrolled in a partner primary or secondary school.\nHousehold income below the program threshold.",
 		startDaysAgo: 30,
 		durationDays: 75,
 		status: "active",
-		featured: true,
 		raised: 18_750,
-		counts: { paid: 30, ready: 1, approved: 4, registered: 4, under_review: 1, rejected: 1 },
+		counts: { paid: 30, ready: 1, allocated: 0, failed: 0, approved: 4, registered: 4, under_review: 1, rejected: 1 },
 	},
 	{
-		reference: "CMP-2026-004",
+		reference: "AT-1004",
 		title: "Safe births, healthy mothers",
-		description: "Delivery kits and transport support for expectant mothers in remote villages. Fully funded and fully disbursed.",
-		category: "health",
-		org: { name: "Mother & Child Care", website: "https://motherandchild.care" },
+		description:
+			"Delivery kits and transport support for expectant mothers in remote villages. Fully funded and fully disbursed.",
+		org: {
+			name: "Water for All Foundation",
+			description: "Safe water and sanitation for rural communities.",
+			websiteUrl: "https://waterforall.org",
+		},
+		category: "Health",
+		featured: false,
 		target: 15_000,
 		maxAllocation: 150,
 		beneficiaryTarget: 100,
-		eligibility: ["Expectant mother registered at a partner health post", "Lives more than 10 km from a maternity facility"],
+		eligibility: "Expectant mother registered at a partner health post.\nLives more than 10 km from a maternity facility.",
 		startDaysAgo: 160,
 		durationDays: 90,
 		status: "closed",
-		featured: false,
 		raised: 15_000,
-		counts: { paid: 100, ready: 0, approved: 0, registered: 0, under_review: 0, rejected: 2 },
+		counts: { paid: 100, ready: 0, allocated: 0, failed: 0, approved: 0, registered: 0, under_review: 0, rejected: 2 },
 	},
 ];
 
-/** Splits `total` into donation-sized pieces. */
-function donations(total: number, rand: () => number) {
-	const sizes = [250, 500, 750, 1000, 1500, 2500, 5000];
+/** Splits `total` into funding deposits. */
+function deposits(total: number, rand: () => number) {
+	const sizes = [1000, 2500, 5000, 7500, 10_000];
 	const out: number[] = [];
 	let left = total;
 	while (left > 0) {
@@ -265,58 +371,68 @@ function donations(total: number, rand: () => number) {
 }
 
 export function createSeed(now = Date.now()): MockDb {
-	const rand = prng(20261123);
-	const db: MockDb = { version: SEED_VERSION, orgs: [], campaigns: [], beneficiaries: [], ledger: [], notifications: [], counters: { beneficiary: 100, campaign: PLANS.length, id: 1 } };
+	const rand = prng(20261124);
+	const db: MockDb = {
+		version: SEED_VERSION,
+		orgs: [],
+		campaigns: [],
+		beneficiaries: [],
+		allocations: [],
+		ledger: [],
+		notifications: [],
+		walletUsdc: usdc(250_000),
+		counters: { beneficiary: 100, campaign: 1000 + PLANS.length, id: 1, ledger: 0 },
+	};
 	const nextId = (prefix: string) => `${prefix}_${(db.counters.id++).toString(36).padStart(6, "0")}`;
+	const org: OrgRow = { id: nextId("org"), ...PLANS[0]!.org, adminWallet: DEMO_ADMIN_WALLET, createdAt: iso(now - 200 * DAY) };
+	db.orgs.push(org);
 
-	for (const [index, plan] of PLANS.entries()) {
+	for (const plan of PLANS) {
 		const start = now - plan.startDaysAgo * DAY;
 		const end = start + plan.durationDays * DAY;
 		const elapsed = Math.min(now, end) - start;
-		const org: OrgRow = { id: nextId("org"), name: plan.org.name, website: plan.org.website, adminWallet: DEMO_ADMIN_WALLET, createdAt: iso(start - 10 * DAY) };
-		db.orgs.push(org);
 		const campaign: CampaignRow = {
-			id: nextId("cmp"),
 			reference: plan.reference,
 			title: plan.title,
 			description: plan.description,
+			eligibilityRequirements: plan.eligibility,
 			category: plan.category,
+			featured: plan.featured,
 			organizationId: org.id,
 			adminWallet: DEMO_ADMIN_WALLET,
 			target: usdc(plan.target),
 			maxAllocation: usdc(plan.maxAllocation),
 			beneficiaryTarget: plan.beneficiaryTarget,
-			eligibility: plan.eligibility,
 			startsAt: iso(start),
 			endsAt: iso(end),
 			status: plan.status,
-			contractCampaignId: String(index + 1),
-			featured: plan.featured,
 			createdAt: iso(start - DAY),
+			updatedAt: iso(start),
 		};
 		db.campaigns.push(campaign);
 
-		// Funding: donations spread over the campaign so far.
-		for (const [i, amount] of donations(plan.raised, rand).entries()) {
-			const at = Math.min(start + Math.floor(rand() * elapsed), now - 30 * 60_000);
+		// Funding: the administrator's deposits into escrow over the campaign so far.
+		for (const [i, amount] of deposits(plan.raised, rand).entries()) {
+			const at = Math.min(start + Math.floor(rand() * elapsed * 0.8), now - 30 * 60_000);
 			db.ledger.push({
 				id: nextId("tx"),
-				campaignId: campaign.id,
 				campaignReference: campaign.reference,
 				type: "funding",
 				amount: usdc(amount),
 				status: "confirmed",
-				counterpartyRef: "Public donor",
+				recipientReference: null,
 				txHash: mockTxHash(`${plan.reference}-fund-${i}`),
+				ledger: 0,
+				failureCode: null,
 				timestamp: iso(at),
 			});
 		}
 
-		// Beneficiaries by status.
-		const order: [BeneficiaryStatusRow | "ready" | "failed", number][] = [
+		const order: ["paid" | "ready" | "allocated" | "failed" | BeneficiaryStatusRow, number][] = [
 			["paid", plan.counts.paid],
 			["ready", plan.counts.ready],
-			["failed", plan.counts.failed ?? 0],
+			["allocated", plan.counts.allocated],
+			["failed", plan.counts.failed],
 			["approved", plan.counts.approved],
 			["under_review", plan.counts.under_review],
 			["rejected", plan.counts.rejected],
@@ -327,77 +443,136 @@ export function createSeed(now = Date.now()): MockDb {
 			for (let k = 0; k < count; k++, n++) {
 				db.counters.beneficiary++;
 				const reference = `BNF-${db.counters.beneficiary.toString().padStart(5, "0")}`;
-				const created = start + Math.floor((n / (plan.beneficiaryTarget * 0.4)) * elapsed * 0.7) + Math.floor(rand() * DAY);
-				const reviewed = created + Math.floor((1 + rand() * 3) * DAY);
-				const name = `${FIRST[Math.floor(rand() * FIRST.length)]} ${LAST[Math.floor(rand() * LAST.length)]}`;
+				const created = Math.min(
+					start + Math.floor((n / (plan.beneficiaryTarget * 0.4)) * elapsed * 0.7) + Math.floor(rand() * DAY),
+					now - 2 * DAY,
+				);
+				const reviewed = Math.min(created + Math.floor((1 + rand() * 3) * DAY), now - DAY);
+				const first = FIRST[Math.floor(rand() * FIRST.length)]!;
+				const last = LAST[Math.floor(rand() * LAST.length)]!;
 				const ev = EVIDENCE[Math.floor(rand() * EVIDENCE.length)]!;
-				const status: BeneficiaryStatusRow = kind === "ready" || kind === "failed" ? "allocated" : kind;
+				const status: BeneficiaryStatusRow =
+					kind === "paid" || kind === "ready" || kind === "allocated" || kind === "failed" ? "approved" : kind;
+				const decided = status === "approved" || status === "rejected";
 				const beneficiary: BeneficiaryRow = {
 					id: nextId("ben"),
 					reference,
-					campaignId: campaign.id,
-					name,
-					wallet: mockAccountId(`${plan.reference}-${reference}`),
-					eligibilityNotes: NOTES[Math.floor(rand() * NOTES.length)]!,
-					evidence: [{ id: nextId("ev"), name: ev.name, contentType: ev.contentType, size: 180_000 + Math.floor(rand() * 900_000), uploadedAt: iso(created) }],
+					campaignReference: campaign.reference,
+					fullName: `${first} ${last}`,
+					email: rand() < 0.8 ? `${first}.${last}@example.org`.toLowerCase() : null,
+					phone: rand() < 0.5 ? `+234 80${Math.floor(10_000_000 + rand() * 89_999_999)}` : null,
+					walletAddress: mockAccountId(`${plan.reference}-${reference}`),
+					eligibilityDetails: NOTES[Math.floor(rand() * NOTES.length)]!,
+					reviewNote: status === "rejected" ? "Outside the campaign's service area." : null,
+					evidence: [
+						{
+							id: nextId("ev"),
+							name: ev.name,
+							contentType: ev.contentType,
+							sizeBytes: 180_000 + Math.floor(rand() * 900_000),
+							sha256: mockTxHash(`ev-${reference}`),
+							createdAt: iso(created),
+						},
+					],
 					status,
-					reviewedBy: status === "registered" || status === "under_review" ? null : DEMO_ADMIN_WALLET,
-					reviewedAt: status === "registered" || status === "under_review" ? null : iso(Math.min(reviewed, now - DAY)),
-					rejectionReason: status === "rejected" ? "Outside the campaign's service area." : null,
-					allocation: null,
-					createdAt: iso(Math.min(created, now - 2 * DAY)),
+					reviewedAt: decided ? iso(reviewed) : null,
+					createdAt: iso(created),
+					updatedAt: iso(decided ? reviewed : created),
+					statusToken: mockTxHash(`token-${reference}`).slice(0, 40),
+				};
+				db.beneficiaries.push(beneficiary);
+				if (kind !== "paid" && kind !== "ready" && kind !== "allocated" && kind !== "failed") continue;
+
+				const allocation: AllocationRow = {
+					id: nextId("alc"),
+					reference: allocationReference(`${plan.reference}-${reference}`),
+					campaignReference: campaign.reference,
+					beneficiaryId: beneficiary.id,
+					amount: campaign.maxAllocation,
+					status: kind === "paid" ? "confirmed" : kind,
+					payoutTxHash: null,
+					paidAt: null,
+					cancelledAt: null,
+					failureMessage:
+						kind === "failed"
+							? "The beneficiary wallet has no USDC trustline. Ask them to enable USDC, then retry the payout."
+							: null,
+					createdAt: iso(Math.max(reviewed, now - 5 * DAY)),
 				};
 				if (kind === "paid") {
-					const paidAt = Math.min(start + Math.floor(elapsed * (0.2 + 0.8 * (k / Math.max(1, count)))), now - 3_600_000 * (count - k));
-					const txHash = mockTxHash(`${plan.reference}-pay-${reference}`);
-					beneficiary.allocation = { id: nextId("alloc"), amount: campaign.maxAllocation, status: "confirmed", txHash, failureReason: null, updatedAt: iso(paidAt) };
+					const paidAt = Math.min(
+						start + Math.floor(elapsed * (0.2 + 0.8 * (k / Math.max(1, count)))),
+						now - 3_600_000 * (count - k),
+					);
+					allocation.createdAt = iso(paidAt - 2 * 3_600_000);
+					allocation.payoutTxHash = mockTxHash(`${plan.reference}-pay-${reference}`);
+					allocation.paidAt = iso(paidAt);
 					db.ledger.push({
 						id: nextId("tx"),
-						campaignId: campaign.id,
 						campaignReference: campaign.reference,
 						type: "disbursement",
-						amount: campaign.maxAllocation,
+						amount: allocation.amount,
 						status: "confirmed",
-						counterpartyRef: reference,
-						txHash,
-						timestamp: iso(paidAt),
+						recipientReference: allocation.reference,
+						txHash: allocation.payoutTxHash,
+						ledger: 0,
+						failureCode: null,
+						timestamp: allocation.paidAt,
 					});
-				} else if (kind === "ready") {
-					beneficiary.allocation = { id: nextId("alloc"), amount: campaign.maxAllocation, status: "ready", txHash: null, failureReason: null, updatedAt: iso(now - 5 * 3_600_000) };
 				} else if (kind === "failed") {
-					const txHash = mockTxHash(`${plan.reference}-fail-${reference}`);
-					beneficiary.allocation = {
-						id: nextId("alloc"),
-						amount: campaign.maxAllocation,
-						status: "failed",
-						txHash,
-						failureReason: "The beneficiary wallet has no USDC trustline. Ask them to add USDC, then retry.",
-						updatedAt: iso(now - 26 * 3_600_000),
-					};
+					// The failed attempt is on the public ledger (it moved nothing and isn't counted in totals).
 					db.ledger.push({
 						id: nextId("tx"),
-						campaignId: campaign.id,
 						campaignReference: campaign.reference,
 						type: "disbursement",
-						amount: campaign.maxAllocation,
+						amount: allocation.amount,
 						status: "failed",
-						counterpartyRef: reference,
-						txHash,
+						recipientReference: allocation.reference,
+						txHash: mockTxHash(`${plan.reference}-fail-${reference}`),
+						ledger: null,
+						failureCode: "RECIPIENT_TRUSTLINE_MISSING",
 						timestamp: iso(now - 26 * 3_600_000),
 					});
 				}
-				db.beneficiaries.push(beneficiary);
+				db.allocations.push(allocation);
 			}
 		}
 	}
 
-	db.ledger.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+	// Ledger numbers follow time, like Stellar's.
+	db.ledger.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+	for (const row of db.ledger)
+		if (row.status === "confirmed") row.ledger = 1_250_000 + Math.floor((Date.parse(row.timestamp) - (now - 200 * DAY)) / 5000);
+	db.counters.ledger = Math.max(1_250_000, ...db.ledger.map((r) => r.ledger ?? 0));
+	db.ledger.reverse();
+	db.allocations.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
 	const water = db.campaigns[0]!;
 	db.notifications.push(
-		{ id: nextId("ntf"), event: "application_received", message: "3 new beneficiary applications for Clean water for every family", campaignId: water.id, readAt: null, createdAt: iso(now - 2 * 3_600_000) },
-		{ id: nextId("ntf"), event: "payout_failed", message: "A payout to a beneficiary in Clean water for every family failed. No funds were deducted.", campaignId: water.id, readAt: null, createdAt: iso(now - 26 * 3_600_000) },
-		{ id: nextId("ntf"), event: "funding_confirmed", message: "2,500 USDC funding confirmed for Clean water for every family", campaignId: water.id, readAt: iso(now - 40 * 3_600_000), createdAt: iso(now - 2 * DAY) },
+		{
+			id: nextId("ntf"),
+			event: "application_received",
+			message: "3 new beneficiary applications for Clean water for every family",
+			campaignReference: water.reference,
+			readAt: null,
+			createdAt: iso(now - 2 * 3_600_000),
+		},
+		{
+			id: nextId("ntf"),
+			event: "payout_failed",
+			message: "A payout for Clean water for every family failed. No funds moved.",
+			campaignReference: water.reference,
+			readAt: null,
+			createdAt: iso(now - 26 * 3_600_000),
+		},
+		{
+			id: nextId("ntf"),
+			event: "funding_confirmed",
+			message: "5,000 USDC funding confirmed for Clean water for every family",
+			campaignReference: water.reference,
+			readAt: iso(now - 40 * 3_600_000),
+			createdAt: iso(now - 2 * DAY),
+		},
 	);
 
 	return db;
@@ -410,57 +585,86 @@ export interface Totals {
 	raised: bigint;
 	allocated: bigint;
 	disbursed: bigint;
+	recovered: bigint;
 	available: bigint;
 	beneficiariesApproved: number;
 	beneficiariesPaid: number;
 }
 
-const OPEN_ALLOCATION: PaymentStatusRow[] = ["allocated", "ready", "processing", "failed"];
+/** Allocations that still hold (or will hold) campaign funds. */
+export const LIVE_ALLOCATION: AllocationStatusRow[] = ["allocated", "ready", "processing", "failed"];
 
 /** Totals from confirmed ledger rows and open allocations: the numbers always reconcile. */
-export function campaignTotals(db: MockDb, campaignId: string): Totals {
-	const campaign = db.campaigns.find((c) => c.id === campaignId);
+export function campaignTotals(db: MockDb, reference: string): Totals {
+	const campaign = db.campaigns.find((c) => c.reference === reference);
 	let raised = 0n;
 	let disbursed = 0n;
+	let recovered = 0n;
 	for (const row of db.ledger) {
-		if (row.campaignId !== campaignId || row.status !== "confirmed") continue;
+		if (row.campaignReference !== reference || row.status !== "confirmed") continue;
 		if (row.type === "funding") raised += BigInt(row.amount);
-		else disbursed += BigInt(row.amount);
+		else if (row.type === "disbursement") disbursed += BigInt(row.amount);
+		else recovered += BigInt(row.amount);
 	}
 	let allocated = 0n;
-	let approved = 0;
-	let paid = 0;
-	for (const b of db.beneficiaries) {
-		if (b.campaignId !== campaignId) continue;
-		if (b.status === "approved" || b.status === "allocated" || b.status === "paid") approved++;
-		if (b.status === "paid") paid++;
-		if (b.allocation && OPEN_ALLOCATION.includes(b.allocation.status)) allocated += BigInt(b.allocation.amount);
+	const paid = new Set<string>();
+	for (const a of db.allocations) {
+		if (a.campaignReference !== reference) continue;
+		if (LIVE_ALLOCATION.includes(a.status)) allocated += BigInt(a.amount);
+		if (a.status === "confirmed") paid.add(a.beneficiaryId);
 	}
-	return { target: BigInt(campaign?.target ?? "0"), raised, allocated, disbursed, available: raised - disbursed, beneficiariesApproved: approved, beneficiariesPaid: paid };
+	const approved = db.beneficiaries.filter((b) => b.campaignReference === reference && b.status === "approved").length;
+	return {
+		target: BigInt(campaign?.target ?? "0"),
+		raised,
+		allocated,
+		disbursed,
+		recovered,
+		available: raised - disbursed - recovered,
+		beneficiariesApproved: approved,
+		beneficiariesPaid: paid.size,
+	};
 }
 
 export interface PlatformStats {
 	campaigns: number;
 	activeCampaigns: number;
+	organizations: number;
 	target: bigint;
 	raised: bigint;
 	disbursed: bigint;
 	beneficiariesApproved: number;
 	beneficiariesPaid: number;
+	verifiedTransactions: number;
 }
 
+/** `GET /public/stats`: public campaigns only (no drafts or cancelled ones). */
 export function platformStats(db: MockDb): PlatformStats {
-	const stats: PlatformStats = { campaigns: 0, activeCampaigns: 0, target: 0n, raised: 0n, disbursed: 0n, beneficiariesApproved: 0, beneficiariesPaid: 0 };
+	const stats: PlatformStats = {
+		campaigns: 0,
+		activeCampaigns: 0,
+		organizations: 0,
+		target: 0n,
+		raised: 0n,
+		disbursed: 0n,
+		beneficiariesApproved: 0,
+		beneficiariesPaid: 0,
+		verifiedTransactions: 0,
+	};
+	const orgs = new Set<string>();
 	for (const c of db.campaigns) {
-		if (c.status === "draft") continue;
-		const t = campaignTotals(db, c.id);
+		if (c.status === "draft" || c.status === "cancelled") continue;
+		const t = campaignTotals(db, c.reference);
 		stats.campaigns++;
 		if (c.status === "active") stats.activeCampaigns++;
+		orgs.add(c.organizationId);
 		stats.target += t.target;
 		stats.raised += t.raised;
 		stats.disbursed += t.disbursed;
 		stats.beneficiariesApproved += t.beneficiariesApproved;
 		stats.beneficiariesPaid += t.beneficiariesPaid;
 	}
+	stats.organizations = orgs.size;
+	stats.verifiedTransactions = db.ledger.filter((r) => r.status === "confirmed").length;
 	return stats;
 }

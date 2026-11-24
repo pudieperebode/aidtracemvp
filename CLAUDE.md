@@ -58,15 +58,24 @@ Contract: Rust + `soroban-sdk`.
 - **Demo panel** (`mock/DemoPanel.tsx`, mock mode only): network speed (fast / realistic), fail the next transaction,
   decline the next signature, reset demo data. Admin sign-in uses the **demo administrator wallet**
   (`DEMO_ADMIN_WALLET`, `features/auth/components/SignInDialog.tsx`).
-- **Provisional contract:** paths and shapes in `dto.ts`, `endpoints.ts`, `flows.ts` come from the PRD backend table.
-  When the backend publishes OpenAPI, update `dto.ts` + `adapters.ts` (+ paths) and keep `mock/server.ts` in step.
-  Live mode: the browser calls `<basePath>/api/v1/*`, rewritten to `API_PROXY_TARGET/v1/*`.
+- **API contract:** the live backend (`https://aidtrace-production.up.railway.app/docs`, JSON at `/docs-json`) and
+  `docs/FRONTEND_INTEGRATION (2).md`. Request bodies are typed in OpenAPI; most response bodies only in the guide.
+  Shapes neither spells out are marked PROVISIONAL in `dto.ts`. When the API changes, update `dto.ts` + `adapters.ts`
+  (+ paths) and keep `mock/server.ts` in step. Live mode: the browser calls `<basePath>/api/v1/*`, rewritten to
+  `API_PROXY_TARGET/v1/*`, so set `API_PROXY_TARGET=https://aidtrace-production.up.railway.app/api`.
 - **Layers:** `dto.ts` → `adapters.ts` (→ `@repo/stellar/campaign`: snake_case, stroop strings, unix seconds) →
   `endpoints.ts` (reads) and `flows.ts` (writes). `publicApi` for public reads and the application form; `api` (bearer
   token, one shared refresh) for administrators.
-- **On-chain writes:** `flows.ts` `onChain()` = prepare → sign → submit → `/sync`. Hooks: `useOnChain` / `useFundCampaign`
-  / `useBatchPayout` (`features/disbursements/hooks.ts`), `useCreateCampaign`. UI: `TxDialog` + `TxProgress`
+- **Sign-in:** wallet only (`/auth/challenge` → sign the challenge transaction → `/auth/verify`). `GET /auth/me`
+  `roles.organizationAdmin` gates admin screens; without it `AdminGate` shows organization registration + `WalletSetup`.
+- **Money actions:** `flows.ts` `runAction()` = backend prepares → wallet signs **unchanged** → `POST …/actions/{id}/submit`
+  → poll `GET …/actions/{id}` every 3 s while `pending`. Never submit to Stellar from the app. Only `confirmed` is
+  success; `failed`/`expired` moved nothing; `pending` after polling must never be re-sent. Lifecycle: Fund → Allocate
+  (off-chain, ≤100) → Lock (signed, ≤20) → Pay (signed, one at a time). Hooks: `useOnChain` / `useFundCampaign` /
+  `useCancelAllocation` / `useBatchPayout` (`features/disbursements/hooks.ts`). UI: `TxDialog` + `TxProgress`
   (`lib/tx.ts` stages). Signer: `features/wallet/signer.ts` (demo wallet or Stellar Wallets Kit). Mutations never retry.
+- **References:** campaigns `AT-…` (every campaign route is keyed by reference), beneficiaries `BNF-…`, allocations
+  `ALC-…` (the only recipient identifier on the public ledger). Errors: branch on `error.code` (`lib/api/errors.ts`).
 - **Amounts** are stroop strings; never float maths (`@repo/stellar/money`, `lib/format.ts`: `usd`, `fixed2`, `usdc`).
 
 ## Domain rules (PRD)

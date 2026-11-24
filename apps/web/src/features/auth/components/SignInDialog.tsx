@@ -16,14 +16,20 @@ import { useWalletStore } from "@/features/wallet/store";
 
 /**
  * Administrator sign-in, opened from the header's "Admin" button or an admin-only screen. Live mode: the wallet modal
- * (Varial extension, Varial Mobile, xBull; connect, then sign a one-time message). Mock mode: the demo administrator
- * wallet runs the same challenge → sign → login sequence with a simulated signature.
+ * (Varial extension, Varial Mobile, xBull; connect, then sign the backend's challenge transaction, which can never be
+ * submitted). Mock mode: the demo administrator wallet runs the same challenge → sign → verify sequence, simulated.
  */
 export function SignInDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
 	const address = useWalletStore((s) => s.address);
 	const walletId = useWalletStore((s) => s.walletId);
 	if (!IS_MOCK) {
-		return <ConnectModal open={open} onOpenChange={onOpenChange} resume={address && walletId && walletId !== "demo" ? { address, walletId: walletId as WalletId } : undefined} />;
+		return (
+			<ConnectModal
+				open={open}
+				onOpenChange={onOpenChange}
+				resume={address && walletId && walletId !== "demo" ? { address, walletId: walletId as WalletId } : undefined}
+			/>
+		);
 	}
 	return <DemoSignIn open={open} onOpenChange={onOpenChange} />;
 }
@@ -39,8 +45,8 @@ function DemoSignIn({ open, onOpenChange }: { open: boolean; onOpenChange: (open
 				<AidTraceMark className="size-9" />
 				<DialogTitle className="mt-5 text-xl font-normal tracking-[-0.02em]">Sign in as an administrator</DialogTitle>
 				<DialogDescription className="mt-2 text-xs leading-5 text-muted">
-					Administrators create campaigns, review beneficiaries and authorize USDC payouts. Signing in proves you control the organization&apos;s wallet; it
-					costs nothing and moves no funds.
+					Administrators create campaigns, review beneficiaries and authorize USDC payouts. Your wallet is your account: sign once
+					to prove you own it. It cannot move any funds.
 				</DialogDescription>
 
 				<div className="mt-5 flex items-center gap-3 rounded-card border border-line p-3.5">
@@ -60,8 +66,8 @@ function DemoSignIn({ open, onOpenChange }: { open: boolean; onOpenChange: (open
 				)}
 
 				<Notice tone="info" title="You're using simulated data" className="mt-4">
-					Signatures and transactions are simulated until the backend is connected. Use the Demo panel (bottom left) to slow the network down or make the next
-					transaction fail.
+					Signatures and transactions are simulated until the backend is connected. Use the Demo panel (bottom left) to slow the
+					network down or make the next transaction fail.
 				</Notice>
 
 				<div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -75,7 +81,9 @@ function DemoSignIn({ open, onOpenChange }: { open: boolean; onOpenChange: (open
 						onClick={async () => {
 							if (await signIn()) {
 								onOpenChange(false);
-								toast.success("Signed in as administrator", { description: "You can now manage campaigns, beneficiaries and payouts." });
+								toast.success("Signed in as administrator", {
+									description: "You can now manage campaigns, beneficiaries and payouts.",
+								});
 							}
 						}}
 					>

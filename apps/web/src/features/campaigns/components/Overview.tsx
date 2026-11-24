@@ -16,7 +16,8 @@ const YEAR = new Date().getUTCFullYear();
 /** Screen 1 in the app (Figma "Landing / Desktop"): platform statistics, featured campaigns, the public-by-default note. */
 export function Overview() {
 	const stats = usePublicStats();
-	const featured = usePublicCampaigns({ featured: true });
+	// The list is featured-first (a platform administrator features campaigns), so the top three fill the row.
+	const featured = usePublicCampaigns({ limit: 3 });
 
 	return (
 		<>
@@ -40,7 +41,13 @@ export function Overview() {
 				<StatsSkeleton />
 			) : (
 				<div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
-					<StatCard className="animate-rise" label="Total funds raised" value={<CountUpUsd stroops={stats.data.raised} />} caption="Across all public campaigns" tone="review" />
+					<StatCard
+						className="animate-rise"
+						label="Total funds raised"
+						value={<CountUpUsd stroops={stats.data.raised} />}
+						caption="Across all public campaigns"
+						tone="review"
+					/>
 					<StatCard
 						className="animate-rise"
 						style={{ ["--i" as string]: 1 }}
@@ -49,7 +56,14 @@ export function Overview() {
 						caption="Delivered to beneficiaries"
 						tone="accent"
 					/>
-					<StatCard className="animate-rise" style={{ ["--i" as string]: 2 }} label="Active campaigns" value={<CountUp value={stats.data.active_campaigns} />} caption="Creating lasting change" tone="pollen" />
+					<StatCard
+						className="animate-rise"
+						style={{ ["--i" as string]: 2 }}
+						label="Active campaigns"
+						value={<CountUp value={stats.data.active_campaigns} />}
+						caption="Creating lasting change"
+						tone="pollen"
+					/>
 					<StatCard
 						className="animate-rise"
 						style={{ ["--i" as string]: 3 }}
@@ -103,7 +117,7 @@ export function Overview() {
 					) : (
 						<div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
 							{featured.data.results.map((c, i) => (
-								<CampaignCard key={c.id} campaign={c} index={i} style={{ ["--i" as string]: i + 2 }} />
+								<CampaignCard key={c.reference} campaign={c} index={i} style={{ ["--i" as string]: i + 2 }} />
 							))}
 						</div>
 					)}

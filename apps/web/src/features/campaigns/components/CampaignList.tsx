@@ -19,11 +19,14 @@ const STATUS = [
 	{ value: "closed", label: "Closed" },
 ];
 
+const asStatus = (s: string | undefined) => (s === "active" || s === "funded" || s === "closed" ? s : undefined);
+
 /** Every public campaign ("View all campaigns"), searchable and filterable by status. Filters live in the URL. */
 export function CampaignList({ q, status }: { q?: string; status?: string }) {
 	const router = useRouter();
-	const list = usePublicCampaigns({ q, status });
-	const set = (next: { q?: string; status?: string }) => router.replace(routes.CAMPAIGNS({ q, status, ...next }), { scroll: false });
+	const list = usePublicCampaigns({ search: q, status: asStatus(status) });
+	const set = (next: { q?: string; status?: string }) =>
+		router.replace(routes.CAMPAIGNS({ q, status, ...next }), { scroll: false });
 
 	return (
 		<>
@@ -46,8 +49,20 @@ export function CampaignList({ q, status }: { q?: string; status?: string }) {
 					set({ q: new FormData(e.currentTarget).get("q")?.toString().trim() || undefined });
 				}}
 			>
-				<SearchInput name="q" defaultValue={q} placeholder="Search by name or reference" aria-label="Search campaigns" className="sm:w-[300px]" />
-				<FilterSelect label="Status" value={status ?? ""} onChange={(v) => set({ status: v || undefined })} options={STATUS} className="sm:w-[180px]" />
+				<SearchInput
+					name="q"
+					defaultValue={q}
+					placeholder="Search by name or reference"
+					aria-label="Search campaigns"
+					className="sm:w-[300px]"
+				/>
+				<FilterSelect
+					label="Status"
+					value={status ?? ""}
+					onChange={(v) => set({ status: v || undefined })}
+					options={STATUS}
+					className="sm:w-[180px]"
+				/>
 			</form>
 
 			{list.error ? (
@@ -79,7 +94,7 @@ export function CampaignList({ q, status }: { q?: string; status?: string }) {
 			) : (
 				<div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
 					{list.data.results.map((c, i) => (
-						<CampaignCard key={c.id} campaign={c} index={i} style={{ ["--i" as string]: Math.min(i, 8) }} />
+						<CampaignCard key={c.reference} campaign={c} index={i} style={{ ["--i" as string]: Math.min(i, 8) }} />
 					))}
 				</div>
 			)}

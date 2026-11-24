@@ -9,11 +9,10 @@ import type { Signer } from "@/lib/api/flows";
  * The one seam to the user's wallet (Stellar Wallets Kit v2, on Stellar Testnet). Varial (formerly Freighter,
  * https://docs.varialwallet.com) is the recommended wallet: its browser extension on desktop, its mobile app over
  * WalletConnect on phones; xBull is the alternative extension. The kit touches `window` when it loads, so it is
- * imported lazily, in the browser only. AidTrace asks the wallet for its address, a sign-in message signature and
- * transaction signatures; it never handles keys.
+ * imported lazily, in the browser only. AidTrace asks the wallet for its address and transaction signatures (sign-in
+ * is a signed challenge transaction that can never be submitted); it never handles keys.
  *
- * Every wallet here must support `signMessage` (sign-in is a signed message), which is why Albedo and Rabet aren't
- * offered. Kit module ids keep Freighter's names ("freighter"); the extension API is unchanged under the new name.
+ * Kit module ids keep Freighter's names ("freighter"); the extension API is unchanged under the new name.
  *
  * Phones: a web page can't tell whether an app is installed. AidTrace opens Varial directly with the WalletConnect
  * pairing link; if the page is still in front a few seconds later, the app most likely isn't installed and the
@@ -314,14 +313,10 @@ async function request<T>(send: (kit: Kit) => Promise<T>) {
 	return pending;
 }
 
-/** Signs the backend's sign-in message (SEP-43 / SEP-53 `signMessage`); returns the base64 signature. */
-export async function signMessage(message: string, address: string) {
-	const { signedMessage } = await request((kit) => kit.signMessage(message, { address, networkPassphrase: NETWORK_PASSPHRASE }));
-	if (!signedMessage) throw new Error("Sign-in was declined in your wallet.");
-	return signedMessage;
-}
-
-/** Asks the wallet to sign a transaction (XDR). Every deposit, authorization batch and withdrawal goes through here. */
+/**
+ * Asks the wallet to sign a transaction (XDR), unchanged: sign-in challenges, trustlines, funding, locks and payouts
+ * all go through here. The signed XDR goes back to the AidTrace backend; the app never submits it to Stellar itself.
+ */
 export async function signTransaction(xdr: string, address: string, networkPassphrase = NETWORK_PASSPHRASE) {
 	await assertTestnet(await ready());
 	const { signedTxXdr } = await request((kit) => kit.signTransaction(xdr, { address, networkPassphrase }));

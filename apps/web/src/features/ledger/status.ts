@@ -1,30 +1,32 @@
 import type { ChipTone } from "@repo/ui/surface";
 import type { LedgerTxType, TxStatus } from "@repo/stellar/campaign";
 
-/** The design calls funding "Donation" and disbursements "Payment". */
-export const TX_TYPE: Record<LedgerTxType, { label: string }> = {
-	funding: { label: "Donation" },
-	disbursement: { label: "Payment" },
+/** The design calls funding "Donation" and disbursements "Payment"; a confirmed one reads `done`. */
+export const TX_TYPE: Record<LedgerTxType, { label: string; done: string }> = {
+	funding: { label: "Donation", done: "Completed" },
+	disbursement: { label: "Payment", done: "Paid" },
+	recovery: { label: "Recovery", done: "Returned" },
 };
 
+/** Pending and failed rows are attempts submitted to Stellar. A failed one moved no funds; totals count confirmed rows only. */
 export const TX_STATUS: Record<TxStatus, { label: string; tone: ChipTone; live?: boolean }> = {
-	pending: { label: "Pending", tone: "pending" },
-	processing: { label: "Processing", tone: "warning", live: true },
 	confirmed: { label: "Completed", tone: "success" },
+	pending: { label: "Pending", tone: "warning", live: true },
 	failed: { label: "Failed", tone: "danger" },
 };
-
-export const TYPE_FILTERS = [
-	{ value: "", label: "Type: All" },
-	{ value: "funding", label: "Donations" },
-	{ value: "disbursement", label: "Payments" },
-];
 
 export const STATUS_FILTERS = [
 	{ value: "", label: "Status: All" },
 	{ value: "confirmed", label: "Completed" },
 	{ value: "pending", label: "Pending" },
 	{ value: "failed", label: "Failed" },
+];
+
+export const TYPE_FILTERS = [
+	{ value: "", label: "Type: All" },
+	{ value: "funding", label: "Donations" },
+	{ value: "disbursement", label: "Payments" },
+	{ value: "recovery", label: "Recoveries" },
 ];
 
 /** Date ranges for the ledger and reports ("01 Aug – 31 Aug 2025" in the design). */
@@ -44,3 +46,7 @@ export function periodStart(period: string | undefined, now: number): string | u
 	}
 	return undefined;
 }
+
+/** The PRD §7 privacy limitation, in the backend guide's words. Shown on every public ledger view. */
+export const PRIVACY_NOTICE =
+	"Names and personal details are never published, but Stellar payments and wallet addresses are publicly visible.";

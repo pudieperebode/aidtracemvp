@@ -23,9 +23,9 @@ export function FundDialog({
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	campaign: { id: string; title: string; reference: string; totals: CampaignTotals };
+	campaign: { title: string; reference: string; totals: CampaignTotals };
 }) {
-	const fund = useFundCampaign(campaign.id);
+	const fund = useFundCampaign(campaign.reference);
 	const balances = useWalletBalances();
 	const toast = useToast();
 	const [amount, setAmount] = useState("");
@@ -33,7 +33,17 @@ export function FundDialog({
 
 	const parsed = usdcAmount.safeParse(amount);
 	const tooMuch = parsed.success && balances.data?.usdc != null && toStroops(amount) > BigInt(balances.data.usdc);
-	const error = touched && (!parsed.success ? parsed.error.issues[0]?.message : tooMuch ? "That's more than your wallet holds." : undefined);
+	const tooSmall = parsed.success && toStroops(amount) < 10_000_000n;
+	const noTrustline = balances.data?.usdc === null;
+	const error =
+		touched &&
+		(!parsed.success
+			? parsed.error.issues[0]?.message
+			: tooSmall
+				? "Fund at least 1 USDC."
+				: tooMuch
+					? "That's more than your wallet holds."
+					: undefined);
 	const remaining = remainingToTarget(campaign.totals);
 
 	const close = (next: boolean) => {
@@ -47,11 +57,14 @@ export function FundDialog({
 
 	const submit = () => {
 		setTouched(true);
-		if (!parsed.success || tooMuch) return;
+		if (!parsed.success || tooMuch || tooSmall) return;
 		fund.mutate(
-			{ amount },
+			{ amount: parsed.data },
 			{
-				onSuccess: ({ hash }) => toast.success(`${fixed2(toStroops(amount))} USDC added to ${campaign.title}`, { action: explorerAction(hash) }),
+				onSuccess: (done) =>
+					toast.success(`${fixed2(toStroops(amount))} USDC added to ${campaign.title}`, {
+						action: explorerAction(done?.hash, done?.explorerUrl),
+					}),
 				onError: () => toast.error("Funding didn't complete", { description: "No USDC left your wallet." }),
 			},
 		);
@@ -62,10 +75,11 @@ export function FundDialog({
 			open={open}
 			onOpenChange={close}
 			title="Fund campaign"
-			description={`Deposit Testnet USDC from your administrator wallet into the ${campaign.reference} escrow held by the AidTrace contract.`}
+			description={`Lock Testnet USDC from your administrator wallet in the ${campaign.reference} escrow on Stellar. Your wallet signs; AidTrace submits it.`}
 			stage={fund.stage}
 			error={fund.error}
 			hash={fund.hash}
+			explorerUrl={fund.explorerUrl}
 			successTitle="Campaign funded"
 			successBody="The deposit is recorded on Stellar and on the public ledger."
 			onRetry={() => fund.reset()}
@@ -77,7 +91,12 @@ export function FundDialog({
 					submit();
 				}}
 			>
-				<Field label="Amount" htmlFor="fund-amount" error={error} hint={balances.data?.usdc != null ? `Wallet balance: ${usdc(balances.data.usdc)}` : undefined}>
+				<Field
+					label="Amount"
+					htmlFor="fund-amount"
+					error={error}
+					hint={balances.data?.usdc != null ? `Wallet balance: ${usdc(balances.data.usdc)}` : undefined}
+				>
 					<AffixInput
 						id="fund-amount"
 						inputMode="decimal"
@@ -90,8 +109,17 @@ export function FundDialog({
 						trailing="USDC"
 					/>
 				</Field>
+				{noTrustline && (
+					<p className="mt-2 text-xs text-accent-dark">
+						Your wallet can&apos;t hold USDC yet. Open the wallet menu (top right) and choose Enable USDC first.
+					</p>
+				)}
 				{BigInt(remaining) > 0n && (
-					<button type="button" className="mt-2 cursor-pointer text-xs text-brand-dark hover:underline" onClick={() => setAmount(fixed2(remaining).replace(/,/g, ""))}>
+					<button
+						type="button"
+						className="mt-2 cursor-pointer text-xs text-brand-dark hover:underline"
+						onClick={() => setAmount(fixed2(remaining).replace(/,/g, ""))}
+					>
 						Fill remaining to target ({usdc(remaining)})
 					</button>
 				)}
