@@ -41,9 +41,16 @@ export function DemoPanel() {
 				Demo
 				{armed && <span className="animate-signal size-1.5 rounded-full bg-pollen-deep text-pollen-deep" aria-hidden />}
 			</PopoverTrigger>
-			<PopoverContent side="top" align="end" sideOffset={10} className="w-[300px] rounded-card border-line bg-white p-4 shadow-[0_24px_60px_-20px_rgba(14,14,14,0.3)]">
+			<PopoverContent
+				side="top"
+				align="end"
+				sideOffset={10}
+				className="w-[300px] rounded-card border-line bg-white p-4 shadow-[0_24px_60px_-20px_rgba(14,14,14,0.3)]"
+			>
 				<p className="text-[13px]">Demo controls</p>
-				<p className="caption mt-1">Simulated data, wallet and Stellar Testnet. Switch to live mode with NEXT_PUBLIC_DATA_MODE=live.</p>
+				<p className="caption mt-1">
+					Simulated data, wallet and Stellar Testnet. Switch to live mode with NEXT_PUBLIC_DATA_MODE=live.
+				</p>
 
 				<fieldset className="mt-4">
 					<legend className="text-xs">Network speed</legend>
@@ -54,7 +61,10 @@ export function DemoPanel() {
 								type="button"
 								aria-pressed={speed === s}
 								onClick={() => setSpeed(s)}
-								className={cn("h-7 cursor-pointer rounded-[4px] text-xs capitalize transition-colors", speed === s ? "bg-white shadow-sm" : "text-muted hover:text-ink")}
+								className={cn(
+									"h-7 cursor-pointer rounded-[4px] text-xs capitalize transition-colors",
+									speed === s ? "bg-white shadow-sm" : "text-muted hover:text-ink",
+								)}
 							>
 								{s === "realistic" ? "Realistic (~5 s)" : "Fast"}
 							</button>

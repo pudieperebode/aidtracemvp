@@ -133,22 +133,18 @@ export async function getCampaign(http: AxiosInstance, reference: string) {
 	return toCampaign(data.data);
 }
 
-export async function listBeneficiaries(http: AxiosInstance, reference: string, params: PageParams & { status?: string } = {}) {
-	const { data } = await http.get<Envelope<Paginated<BeneficiaryDto>>>(`/campaigns/${ref(reference)}/beneficiaries`, { params });
-	return toPage(data.data, toBeneficiary);
+export interface BeneficiaryFilters extends PageParams {
+	status?: string;
+	/** "none": no live or paid allocation yet; "allocated": has one. */
+	allocation?: "none" | "allocated";
+	/** Start of a BNF- reference or wallet address (names are encrypted, so not searchable). */
+	search?: string;
 }
 
-/** Every approved beneficiary of a campaign (Fund allocation). */
-export async function listAllBeneficiaries(http: AxiosInstance, reference: string, status?: string) {
-	const rows = await all(
-		async (page) =>
-			(
-				await http.get<Envelope<Paginated<BeneficiaryDto>>>(`/campaigns/${ref(reference)}/beneficiaries`, {
-					params: { ...page, status },
-				})
-			).data.data,
-	);
-	return rows.map(toBeneficiary);
+/** One page of the organization's list (with names, each logged by the backend, and each row's allocation). */
+export async function listBeneficiaries(http: AxiosInstance, reference: string, params: BeneficiaryFilters = {}) {
+	const { data } = await http.get<Envelope<Paginated<BeneficiaryDto>>>(`/campaigns/${ref(reference)}/beneficiaries`, { params });
+	return toPage(data.data, toBeneficiary);
 }
 
 /** The full protected record. The backend writes an access-log entry for every call, so load it only on request. */

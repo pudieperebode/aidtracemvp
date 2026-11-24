@@ -10,7 +10,8 @@ import { formatAmount } from "@repo/stellar/format";
 const SCALE = 10_000_000n;
 
 /** "1,000 USDC". */
-export const money = (stroops: string | bigint, asset = "USDC", decimals = 2) => `${formatAmount(stroops, decimals)} ${assetCode(asset)}`;
+export const money = (stroops: string | bigint, asset = "USDC", decimals = 2) =>
+	`${formatAmount(stroops, decimals)} ${assetCode(asset)}`;
 
 /** Always two decimals, grouped: "72,000.00", "-250.00". */
 export function fixed2(stroops: string | bigint) {
@@ -42,7 +43,8 @@ export function percent(part: string | bigint | number, whole: string | bigint |
 
 type DateInput = string | number | Date;
 /** Numbers below 10^11 are unix seconds (the UI model); larger ones are milliseconds. */
-export const toDate = (value: DateInput) => (value instanceof Date ? value : typeof value === "number" && value < 1e11 ? new Date(value * 1000) : new Date(value));
+export const toDate = (value: DateInput) =>
+	value instanceof Date ? value : typeof value === "number" && value < 1e11 ? new Date(value * 1000) : new Date(value);
 
 const dayFormat = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
 /** Some engines write "Sept"; the design uses three-letter months ("24 Aug"). */
@@ -84,7 +86,8 @@ export function relative(target: number, now: number) {
 }
 
 /** "GDQP…4201" for addresses and "0x7f8a3d…b24e" style for hashes. */
-export const shortHash = (hash: string, head = 8, tail = 4) => (hash.length > head + tail + 1 ? `${hash.slice(0, head)}…${hash.slice(-tail)}` : hash);
+export const shortHash = (hash: string, head = 8, tail = 4) =>
+	hash.length > head + tail + 1 ? `${hash.slice(0, head)}…${hash.slice(-tail)}` : hash;
 
 /** "1.2 MB" */
 export function fileSize(bytes: number) {

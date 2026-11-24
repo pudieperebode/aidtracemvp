@@ -13,9 +13,19 @@ type Item = { label: string; href: string; icon: typeof LayoutGrid; match: (path
 export const WORKSPACE: Item[] = [
 	{ label: "Overview", href: routes.OVERVIEW, icon: LayoutGrid, match: (p) => p === "/overview" || p === "/campaigns" },
 	{ label: "Create campaign", href: routes.CREATE_CAMPAIGN, icon: Plus, match: (p) => p === "/campaigns/new" },
-	{ label: "Beneficiaries", href: routes.BENEFICIARIES(), icon: Users, match: (p) => p.startsWith("/beneficiaries") || p.endsWith("/apply") },
+	{
+		label: "Beneficiaries",
+		href: routes.BENEFICIARIES(),
+		icon: Users,
+		match: (p) => p.startsWith("/beneficiaries") || p.endsWith("/apply"),
+	},
 	{ label: "Fund allocation", href: routes.ALLOCATION(), icon: Wallet, match: (p) => p.startsWith("/allocation") },
-	{ label: "Campaign dashboard", href: routes.CAMPAIGN("CMP-2026-001"), icon: BarChart3, match: (p) => /^\/campaigns\/(?!new$)[^/]+$/.test(p) },
+	{
+		label: "Campaign dashboard",
+		href: routes.CAMPAIGN("CMP-2026-001"),
+		icon: BarChart3,
+		match: (p) => /^\/campaigns\/(?!new$)[^/]+$/.test(p),
+	},
 	{ label: "Public ledger", href: routes.LEDGER(), icon: FileText, match: (p) => p.startsWith("/ledger") },
 	{ label: "Reports", href: routes.REPORTS(), icon: LineChart, match: (p) => p.startsWith("/reports") },
 ];

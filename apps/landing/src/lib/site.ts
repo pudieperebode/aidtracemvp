@@ -4,7 +4,7 @@ const SITE_TAGLINE = "One source. Every gift. A clear impact.";
 const SITE_DESCRIPTION =
 	"AidTrace connects generosity to real change. Organizations fund campaigns, approve beneficiaries and send USDC on Stellar; every confirmed payment tells a story of real support, with private details kept off-chain. Live on Stellar Testnet.";
 
-const SITE_KEYWORDS = ["AidTrace", "aid distribution", "humanitarian aid", "NGO", "nonprofit", "donation transparency", "public ledger", "Stellar", "Soroban", "USDC", "Stellar Testnet"];
+const SITE_KEYWORDS = ["AidTrace", "aid distribution", "humanitarian aid", "NGO", "nonprofit", "donation transparency", "public ledger", "Stellar", "USDC", "Stellar Testnet"];
 
 const THEME_COLOR = "#ffffff";
 

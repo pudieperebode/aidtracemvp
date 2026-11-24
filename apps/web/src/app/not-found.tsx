@@ -18,10 +18,25 @@ export default function NotFound() {
 			<main id="main" className="flex flex-1 items-center justify-center px-4 py-16">
 				<div className="animate-pop flex max-w-[520px] flex-col items-center text-center">
 					<svg viewBox="0 0 260 90" className="h-[90px] w-[260px]" fill="none" aria-hidden>
-						<path d="M10 60 C60 60 70 20 120 20 S180 60 200 60" stroke="var(--color-brand)" strokeWidth="2" strokeLinecap="round" pathLength={100} strokeDasharray="70 100" />
+						<path
+							d="M10 60 C60 60 70 20 120 20 S180 60 200 60"
+							stroke="var(--color-brand)"
+							strokeWidth="2"
+							strokeLinecap="round"
+							pathLength={100}
+							strokeDasharray="70 100"
+						/>
 						<path d="M200 60h40" stroke="var(--color-line-strong)" strokeWidth="2" strokeLinecap="round" strokeDasharray="3 6" />
 						<circle cx="10" cy="60" r="6" fill="var(--color-brand)" />
-						<text x="130" y="82" textAnchor="middle" fill="var(--color-ink)" fontSize="22" fontFamily="var(--font-sans)" letterSpacing="-0.5">
+						<text
+							x="130"
+							y="82"
+							textAnchor="middle"
+							fill="var(--color-ink)"
+							fontSize="22"
+							fontFamily="var(--font-sans)"
+							letterSpacing="-0.5"
+						>
 							404
 						</text>
 						<circle cx="246" cy="60" r="7" fill="white" stroke="var(--color-line-strong)" strokeWidth="2" />

@@ -176,6 +176,82 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
 
+  apps/admin:
+    dependencies:
+      '@creit.tech/stellar-wallets-kit':
+        specifier: ^2.7.1
+        version: 2.8.0(@types/react@19.3.0)(bufferutil@4.2.0)(debug@4.4.3(supports-color@7.2.0))(near-api-js@5.1.1)(react@19.3.1)(supports-color@7.2.0)(tslib@2.9.1)(typescript@5.9.3)(utf-8-validate@6.1.0)(zod@4.6.7)
+      '@fontsource/dm-mono':
+        specifier: ^5.0.0
+        version: 5.3.0
+      '@fontsource/instrument-sans':
+        specifier: ^5.0.0
+        version: 5.3.0
+      '@repo/mock':
+        specifier: workspace:*
+        version: link:../../packages/mock
+      '@repo/stellar':
+        specifier: workspace:*
+        version: link:../../packages/stellar
+      '@repo/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      '@stellar/stellar-sdk':
+        specifier: ^14.0.0
+        version: 14.6.1(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)
+      '@tanstack/react-query':
+        specifier: ^5.104.4
+        version: 5.108.2(@types/react@19.3.0)(react@19.3.1)
+      axios:
+        specifier: ^1.20.0
+        version: 1.21.1(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)
+      lucide-react:
+        specifier: ^1.52.0
+        version: 1.77.0(@types/react@19.3.0)(react@19.3.1)
+      next:
+        specifier: ^16.3.8
+        version: 16.4.6(@babel/core@7.29.13(supports-color@7.2.0))(@types/node@26.6.6)(babel-plugin-react-compiler@1.0.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      react:
+        specifier: ^19.3.0
+        version: 19.3.1
+      react-dom:
+        specifier: ^19.3.0
+        version: 19.3.1(react@19.3.1)
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.7
+      zustand:
+        specifier: ^5.0.15
+        version: 5.1.0(@types/react@19.3.0)(react@19.3.1)
+    devDependencies:
+      '@tailwindcss/postcss':
+        specifier: ^4.3.3
+        version: 4.3.5
+      '@types/node':
+        specifier: ^26.6.4
+        version: 26.6.6
+      '@types/react':
+        specifier: ^19.3.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.3.0
+        version: 19.3.0(@types/react@19.3.0)
+      babel-plugin-react-compiler:
+        specifier: ^1.0.0
+        version: 1.0.0
+      eslint:
+        specifier: ^9.39.5
+        version: 9.39.5(jiti@2.7.0)(supports-color@7.2.0)
+      eslint-config-next:
+        specifier: ^16.3.8
+        version: 16.4.6(@typescript-eslint/parser@8.73.0(eslint@9.39.5(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@5.9.3)
+      tailwindcss:
+        specifier: ^4.3.3
+        version: 4.3.5
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   apps/landing:
     dependencies:
       '@fontsource/dm-mono':

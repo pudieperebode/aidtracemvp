@@ -128,6 +128,9 @@ export const SEED_VERSION = 6;
 /** The demo organization administrator. Mock data only: there is no secret key behind this address. */
 export const DEMO_ADMIN_WALLET = mockAccountId("aidtrace-demo-admin");
 
+/** The demo platform administrator (apps/admin): in the backend's ADMIN_WALLETS, with no organization. Mock only. */
+export const DEMO_PLATFORM_WALLET = mockAccountId("aidtrace-demo-platform");
+
 // --- helpers -------------------------------------------------------------------------------------------------------
 
 const UNIT = 10_000_000n;

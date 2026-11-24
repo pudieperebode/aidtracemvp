@@ -281,6 +281,8 @@ export interface Beneficiary {
   walletAddress: string;
   /** In the organization list only. Each name shown is logged. */
   fullName?: string;
+  /** In the organization list only. Null when there is no live or paid allocation. */
+  allocation?: { reference: string; amount: string; status: AllocationStatus } | null;
   status: ApplicationStatus;
   eligibilityStatus: 'pending' | 'eligible' | 'ineligible';
   reviewedAt: string | null;
@@ -551,13 +553,23 @@ Base path: `/campaigns/{reference}/beneficiaries`
 | Method | Path | Notes |
 | --- | --- | --- |
 | POST | `/` | Register. Same body as the application, with `email` optional |
-| GET | `/?status=` | List with `fullName`. No contact details or evidence. Each name shown is logged |
+| GET | `/?status=&allocation=&search=&limit=&offset=` | List with `fullName` and the current `allocation`. No contact details or evidence. Each name shown is logged |
 | GET | `/{id}` | Full protected record. **Every view is logged** |
 | POST | `/{id}/review` | `{ decision, note? }`. The note is shown to the applicant |
 | PATCH | `/{id}/wallet` | `{ walletAddress }`. Only before a decision |
 | POST | `/{id}/status-link` | Sends a new link. The old one stops working |
 | POST | `/{id}/evidence` | Multipart field `file` |
 | GET | `/{id}/evidence/{fileId}` | Download with `download()`. Do not open it in an iframe |
+
+List filters:
+
+- `allocation=none` keeps beneficiaries with no allocation yet (a cancelled one does not count). `allocation=allocated` keeps those with a live or paid one.
+- `search` matches the start of a beneficiary reference (`BNF-...`) or wallet address. It does not search names, because names are stored encrypted.
+- The list is paged: 20 rows by default, and `limit` goes up to the page-size maximum. Use `paginationMeta` for page controls.
+
+Each row has `allocation: { reference, amount, status } | null`.
+
+**Allocation screen:** load `?status=approved&allocation=none&limit=20` and page through it, with `search` to find one person. Do not fetch every approved beneficiary at once. Each name loaded is logged, so loading the whole list also floods the access log.
 
 ```
 registered → (start_review) → under_review → (approve)  → approved

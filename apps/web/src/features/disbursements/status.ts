@@ -25,3 +25,10 @@ export const canPay = (status: PaymentStatus) => status !== "confirmed" && statu
 
 /** Unpaid allocations can be cancelled (a locked one needs a signature to return its funds to the pool). */
 export const canCancel = (status: PaymentStatus) => status === "allocated" || status === "ready" || status === "failed";
+
+/** Fund allocation list filter (backend `allocation=`). The guide's default: approved people not yet allocated. */
+export const ALLOCATION_FILTERS: { value: "none" | "allocated" | ""; label: string }[] = [
+	{ value: "none", label: "Not allocated" },
+	{ value: "allocated", label: "Allocated or paid" },
+	{ value: "", label: "All approved" },
+];

@@ -1,29 +1,29 @@
 # AidTrace MVP: plan
 
-Source: the PRD (linked from CLAUDE.md). Design: see [DESIGN-PLAN.md](DESIGN-PLAN.md).
+Source: the PRD (linked from CLAUDE.md). Design: see [DESIGN-PLAN.md](DESIGN-PLAN.md). API contract:
+[FRONTEND_INTEGRATION (2).md](<FRONTEND_INTEGRATION (2).md>) and the live OpenAPI at
+https://api.aidtrace.africa/docs.
 
 **Definition of done (PRD §13):** an organization creates a campaign, registers beneficiaries, reviews eligibility and
-approves allocations; an authorized administrator funds the campaign and disburses testnet USDC to approved wallets
-through Stellar and Soroban; the contract enforces authorization, keeps accurate accounting and prevents unauthorized
-or duplicate payouts; the public dashboard shows funding, disbursements, balances and verified history without
-exposing beneficiary records.
+approves allocations; an authorized administrator funds the campaign and disburses testnet USDC to approved wallets on
+Stellar; the backend enforces authorization, keeps accurate accounting and prevents unauthorized or duplicate payouts;
+the public dashboard shows funding, disbursements, balances and verified history without exposing beneficiary records.
 
 ## Architecture
 
+There is no smart contract. The backend holds campaign funds in Stellar claimable balances and owns every rule.
+
 ```
- Browser (apps/web)                          Stellar Testnet                      Backend (separate repo)
- Wallets Kit ── signMessage ───────────────────────────────────────────────────► /auth (JWT, org admins only)
-           ── signs prepared tx ──► AidTrace contract ◄── prepared by /campaigns/…/{register,funding,allocation,payout}
-                                    (USDC escrow, allocations,   ──events──► indexer → public ledger, reconciliation
-                                     one-time payouts)
- /app/api/v1 (Next proxy) ─────────────────────────────────────────────────────► /v1 reads + off-chain writes
- apps/landing (server fetch) ──────────────────────────────────────────────────► /v1/public/* (featured, stats)
+ Browser (apps/web, apps/admin)                Backend (separate repo)                    Stellar Testnet
+ Wallets Kit ── signs challenge tx ──────────► /auth/challenge → /auth/verify (JWT)
+             ── signs prepared tx unchanged ─► /campaigns/…/actions/{id}/submit ──submits──► claimable balances
+ <basePath>/api/v1 (Next proxy) ─────────────► /api/v1 reads + off-chain writes ◄──settles── (pool + one per allocation)
+ apps/landing (server fetch) ────────────────► /api/v1/public/* (featured, stats)
 ```
 
-- Off-chain (backend): campaign metadata, protected beneficiary records and evidence, review decisions,
-  notifications, reconciliation, report data.
-- On-chain (contract): campaign registration + admin, USDC balances, allocations by beneficiary reference, payouts.
-- The UI marks a payout "Paid" only after the backend verified the transaction on chain.
+- Backend: campaigns, protected beneficiary records and evidence, review decisions, escrow (claimable balances),
+  settlement sweep, reconciliation, notifications, reports, platform administration, access and audit logs.
+- The UI marks a payout "Paid" only after the backend reports the transaction `confirmed`.
 
 ## Screens → routes
 
@@ -32,41 +32,31 @@ exposing beneficiary records.
 | 1 Landing & Public Campaigns | `apps/landing` `/`, app `/overview` | `features/landing/*`, `campaigns/Overview` |
 | — Public campaign list | `/campaigns` | `campaigns/CampaignList` |
 | 2 Create Campaign | `/campaigns/new` | `campaigns/CreateCampaign` |
-| 3 Beneficiary Registration & Approval | `/beneficiaries`, `/campaigns/[ref]/apply` | `beneficiaries/Beneficiaries`, `ApplyForm` |
+| 3 Beneficiary Registration & Approval | `/beneficiaries`, `/campaigns/[ref]/apply`, `/applications/status` | `beneficiaries/*` |
 | 4 Fund Allocation & Disbursement | `/allocation` (Fund campaign dialog) | `disbursements/FundAllocation` |
 | 5 Public Campaign Dashboard | `/campaigns/[ref]` | `campaigns/CampaignDashboard` |
-| 6 Public Transaction Ledger | `/ledger` (`?campaign=&type=&status=&q=`) | `ledger/PublicLedger` |
+| 6 Public Transaction Ledger | `/ledger` | `ledger/PublicLedger` |
 | 7 Reports & Financial Reconciliation | `/reports` | `reports/Reports` |
-| — Admin sign-in | "Admin" button / admin gate | `auth/SignInDialog` (demo or `wallet/ConnectModal`) |
-| — Notifications | bell in the header (admins) | `notifications/hooks` |
+| — Platform administration | `apps/admin` (`/admin` on Vercel) | `apps/admin/src/features/*` |
 
 ## Status (MVP checklist, PRD §12)
 
-- [x] Monorepo, shared packages, routes, data model, provisional API layer, wallet sign-in, contract scaffold
+- [x] Monorepo, shared packages, routes, data model, API layer against the live backend, wallet sign-in
 - [x] Design applied (Figma "Aidtrace"): landing + all 7 app screens, desktop and mobile, empty / error / loading states
-- [x] Full mock backend (NEXT_PUBLIC_DATA_MODE=mock) with simulated wallet + Stellar: every flow can be walked end to end
-- [x] Complete Figma designs (applied)
-- [~] Organization and campaign registration (UI + mock done; needs backend)
-- [~] Beneficiary registration and eligibility review (UI + mock done; needs backend)
-- [ ] Beneficiary approval and wallet registration
-- [ ] Deploy Soroban campaign funding and disbursement contract on Stellar Testnet (contract id: _tbd_)
-- [ ] Stellar wallet connectivity and testnet USDC (funding flow)
-- [~] Beneficiary allocations and authorized payouts (UI + mock done; needs contract + backend)
-- [ ] Prevent unauthorized and duplicate disbursements (contract tests)
-- [~] Organization financial dashboard (Reports; mock data)
-- [~] Public campaign transparency dashboard (mock data)
-- [~] Searchable transaction history and explorer links (mock data)
-- [x] Downloadable CSV financial reports (public-safe fields only)
-- [ ] Protect sensitive beneficiary information (backend access control + public types)
-- [ ] Automated contract and integration tests
-- [ ] Submit GitHub repository, deployed MVP URL, contract address and technical report
+- [x] Mock backend (NEXT_PUBLIC_DATA_MODE=mock) with simulated wallet + Stellar: every flow can be walked end to end
+- [x] Organization and campaign registration (backend API)
+- [x] Beneficiary registration, eligibility review and private applicant status page (backend API)
+- [x] Funding, allocation, escrow lock and payouts through the backend's prepare → sign → submit flow
+- [x] Public dashboard, ledger with explorer links, CSV reports, reconciliation (backend API)
+- [x] Platform-admin console (`apps/admin`) on the backend's `/admin` API
+- [ ] Confirm the PROVISIONAL response shapes (`dto.ts` in both apps) against real data
+- [ ] Run the full flow in live mode on Testnet with real wallets; record hashes in TESTING.md
+- [ ] Submit GitHub repository, deployed MVP URL and technical report
 
 ## Open questions
 
-- Backend: base URL, OpenAPI document, and whether it matches the provisional paths in `apps/web/src/lib/api`.
-- Who can fund a campaign: only the administrator wallet (PRD "authorized wallets"), or any donor wallet too?
-- Beneficiary applications: public self-service form (current routes) or administrator-entered only?
 - WalletConnect: create AidTrace's own Reown project id (`NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`).
+- The backend's `FRONTEND_URL` must include the app's `/app` base path for emailed status links.
 
 ## Out of scope (PRD)
 

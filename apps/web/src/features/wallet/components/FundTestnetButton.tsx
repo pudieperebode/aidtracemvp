@@ -7,7 +7,15 @@ import { errorMessage } from "@/lib/api/errors";
 import { useToast } from "@/lib/use-toast";
 
 /** Funds a Testnet account with Friendbot (10,000 test XLM, no real value). Only ever runs on click. */
-export function FundTestnetButton({ address, onFunded, size = "sm" }: { address: string; onFunded?: () => void; size?: "sm" | "md" }) {
+export function FundTestnetButton({
+	address,
+	onFunded,
+	size = "sm",
+}: {
+	address: string;
+	onFunded?: () => void;
+	size?: "sm" | "md";
+}) {
 	const toast = useToast();
 	const [busy, setBusy] = useState(false);
 

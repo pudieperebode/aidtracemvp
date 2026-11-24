@@ -2,7 +2,13 @@
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, publicApi } from "@/lib/api/client";
-import { getApplicationStatus, getBeneficiaryRecord, listAllocations, listBeneficiaries } from "@/lib/api/endpoints";
+import {
+	getApplicationStatus,
+	getBeneficiaryRecord,
+	listAllocations,
+	listBeneficiaries,
+	type BeneficiaryFilters,
+} from "@/lib/api/endpoints";
 import {
 	applyToCampaign,
 	downloadEvidence,
@@ -24,11 +30,8 @@ export const beneficiaryKeys = {
 	allocations: (campaign: string) => ["allocations", campaign] as const,
 };
 
-/** A page of beneficiary rows (reference, wallet, status: no personal details). */
-export function useBeneficiaries(
-	campaign: string | undefined,
-	filters: { status?: string; limit?: number; offset?: number } = {},
-) {
+/** A page of the organization's beneficiary rows (name, reference, wallet, status, allocation). */
+export function useBeneficiaries(campaign: string | undefined, filters: BeneficiaryFilters = {}) {
 	const token = useSession((s) => s.accessToken);
 	return useQuery({
 		queryKey: beneficiaryKeys.list(campaign ?? "", filters),
@@ -38,7 +41,7 @@ export function useBeneficiaries(
 	});
 }
 
-/** Every allocation of the campaign (to show Allocated / Paid next to approved beneficiaries). */
+/** Every allocation of the campaign (no names). Fund allocation uses it for the ids that pay and cancel need. */
 export function useAllocations(campaign: string | undefined) {
 	const token = useSession((s) => s.accessToken);
 	return useQuery({

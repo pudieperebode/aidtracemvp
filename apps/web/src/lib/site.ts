@@ -2,9 +2,19 @@
 const SITE_NAME = "AidTrace";
 const SITE_TAGLINE = "Transparent aid distribution on Stellar";
 const SITE_DESCRIPTION =
-	"AidTrace connects generosity to real change. Organizations run aid campaigns, approve beneficiaries and pay out USDC through a Soroban contract on Stellar, while donors follow every payment on a public, privacy-safe ledger.";
+	"AidTrace connects generosity to real change. Organizations run aid campaigns, approve beneficiaries and pay out USDC from escrow on Stellar, while donors follow every payment on a public, privacy-safe ledger.";
 
-const SITE_KEYWORDS = ["AidTrace", "aid distribution", "humanitarian", "NGO", "transparency", "public ledger", "Stellar", "Soroban", "USDC", "Stellar Testnet"];
+const SITE_KEYWORDS = [
+	"AidTrace",
+	"aid distribution",
+	"humanitarian",
+	"NGO",
+	"transparency",
+	"public ledger",
+	"Stellar",
+	"USDC",
+	"Stellar Testnet",
+];
 
 const TWITTER_HANDLE = "@aidtrace";
 
@@ -18,7 +28,9 @@ const BRAND = { teal: "#0b7774", deep: "#053836", pollen: "#ffc93c", ink: "#2929
 const IS_PRODUCTION = process.env.NEXT_PUBLIC_VERCEL_ENV === "production";
 
 /** Vercel's production domain for this project (set automatically on Vercel), shared with the landing site. */
-const PRODUCTION_ORIGIN = process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}` : undefined;
+const PRODUCTION_ORIGIN = process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL
+	? `https://${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}`
+	: undefined;
 
 /**
  * Absolute site URL for `metadataBase`: NEXT_PUBLIC_SITE_URL → the project's production domain in production → the
@@ -43,6 +55,19 @@ const SITE_URL = new URL(`${BASE_PATH}/`, ORIGIN);
 
 /** The landing site (`apps/landing`). Link to it with a plain <a>. */
 const LANDING_URL =
-	process.env.NEXT_PUBLIC_LANDING_URL ?? (IS_PRODUCTION || process.env.NODE_ENV !== "development" ? "/" : "http://localhost:3002");
+	process.env.NEXT_PUBLIC_LANDING_URL ??
+	(IS_PRODUCTION || process.env.NODE_ENV !== "development" ? "/" : "http://localhost:3002");
 
-export { SITE_NAME, SITE_TAGLINE, SITE_DESCRIPTION, SITE_KEYWORDS, TWITTER_HANDLE, THEME_COLOR, BRAND, SITE_URL, BASE_PATH, withBasePath, LANDING_URL };
+export {
+	SITE_NAME,
+	SITE_TAGLINE,
+	SITE_DESCRIPTION,
+	SITE_KEYWORDS,
+	TWITTER_HANDLE,
+	THEME_COLOR,
+	BRAND,
+	SITE_URL,
+	BASE_PATH,
+	withBasePath,
+	LANDING_URL,
+};

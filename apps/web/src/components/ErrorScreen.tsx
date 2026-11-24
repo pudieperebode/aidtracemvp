@@ -11,12 +11,19 @@ import { routes } from "@/lib/routes";
  */
 export function ErrorScreen({ retry, digest, inline = false }: { retry: () => void; digest?: string; inline?: boolean }) {
 	return (
-		<div className={inline ? "flex min-h-[60vh] items-center justify-center py-10" : "flex min-h-dvh items-center justify-center bg-page px-4 py-10"}>
+		<div
+			className={
+				inline
+					? "flex min-h-[60vh] items-center justify-center py-10"
+					: "flex min-h-dvh items-center justify-center bg-page px-4 py-10"
+			}
+		>
 			<div className="animate-pop flex max-w-[480px] flex-col items-center text-center">
 				<BrokenTrace />
 				<h1 className="h-page mt-8">Something interrupted the trace</h1>
 				<p className="mt-3 text-[13px] leading-6 text-muted">
-					This screen hit an unexpected problem. Campaign funds are held by the contract and are not affected, and nothing was sent on your behalf.
+					This screen hit an unexpected problem. Campaign funds are held in escrow on Stellar and are not affected, and nothing was
+					sent on your behalf.
 				</p>
 				{digest && <p className="caption mt-2 font-mono">Reference {digest}</p>}
 				<div className="mt-8 flex flex-wrap justify-center gap-2">
@@ -32,7 +39,7 @@ export function ErrorScreen({ retry, digest, inline = false }: { retry: () => vo
 	);
 }
 
-/** Donor → contract → beneficiary, with the line broken before the last stop. */
+/** Donor → escrow → beneficiary, with the line broken before the last stop. */
 function BrokenTrace() {
 	return (
 		<svg viewBox="0 0 220 60" className="h-[60px] w-[220px]" fill="none" aria-hidden>

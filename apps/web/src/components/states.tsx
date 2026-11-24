@@ -37,17 +37,32 @@ export function EmptyState({
 }
 
 /** A load failed (Figma "Error states"): what happened in plain words, that funds are safe, and a retry. */
-export function ErrorState({ error, onRetry, title, className }: { error: unknown; onRetry?: () => void; title?: string; className?: string }) {
+export function ErrorState({
+	error,
+	onRetry,
+	title,
+	className,
+}: {
+	error: unknown;
+	onRetry?: () => void;
+	title?: string;
+	className?: string;
+}) {
 	const offline = errorMessage(error).includes("couldn't reach");
 	const notFound = httpStatus(error) === 404;
 	const Icon = offline ? WifiOff : notFound ? SearchX : RotateCcw;
 	return (
-		<div role="alert" className={cn("animate-pop flex flex-col items-center justify-center px-4 py-12 text-center sm:py-16", className)}>
+		<div
+			role="alert"
+			className={cn("animate-pop flex flex-col items-center justify-center px-4 py-12 text-center sm:py-16", className)}
+		>
 			<span className="flex size-10 items-center justify-center rounded-card bg-accent-soft text-accent-deep">
 				<Icon className="size-[18px]" aria-hidden />
 			</span>
 			<p className="mt-4 text-sm">{title ?? (notFound ? "Not found" : "We couldn't load this")}</p>
-			<p className="caption mt-1.5 max-w-[380px]">{errorMessage(error, "Something went wrong while loading. Campaign funds are unaffected.")}</p>
+			<p className="caption mt-1.5 max-w-[380px]">
+				{errorMessage(error, "Something went wrong while loading. Campaign funds are unaffected.")}
+			</p>
 			{onRetry && !notFound && (
 				<Button variant="outline" size="sm" className="mt-5" onClick={onRetry}>
 					<RotateCcw /> Try again

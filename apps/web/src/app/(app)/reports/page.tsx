@@ -10,7 +10,14 @@ export default async function Page({ searchParams }: PageProps<"/reports">) {
 	const p = await searchParams;
 	return (
 		<AdminGate title="Reports" subtitle="Monitor campaign inflows, outflows and beneficiary payments.">
-			<Reports query={{ campaign: one(p, "campaign"), period: one(p, "period"), type: one(p, "type"), page: Number(one(p, "page") ?? 1) || 1 }} />
+			<Reports
+				query={{
+					campaign: one(p, "campaign"),
+					period: one(p, "period"),
+					type: one(p, "type"),
+					page: Number(one(p, "page") ?? 1) || 1,
+				}}
+			/>
 		</AdminGate>
 	);
 }

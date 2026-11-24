@@ -1,37 +1,35 @@
 "use client";
 
-import { useState } from "react";
+import { useDeferredValue, useState } from "react";
 import Link from "next/link";
 import { CircleDollarSign, Send, Wallet } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
 import { Button } from "@repo/ui/button";
 import { Checkbox } from "@repo/ui/checkbox";
+import { SearchInput } from "@repo/ui/field";
 import { Chip, DetailRow, Notice, StatCard } from "@repo/ui/surface";
 import { toStroops } from "@repo/stellar/format";
 import type { Allocation, Beneficiary, PaymentStatus } from "@repo/stellar/campaign";
 import { routes } from "@/lib/routes";
-import { api } from "@/lib/api/client";
-import { listAllBeneficiaries } from "@/lib/api/endpoints";
 import { errorMessage } from "@/lib/api/errors";
 import { fixed2, usdc } from "@/lib/format";
 import { useToast } from "@/lib/use-toast";
 import { PageHeader } from "@/components/PageHeader";
-import { DataTable, type Column } from "@/components/DataTable";
+import { DataTable, FilterSelect, Pagination, type Column } from "@/components/DataTable";
 import { CardSkeleton, EmptyState, ErrorState, StatsSkeleton } from "@/components/states";
 import { CountUp, CountUpUsd } from "@/components/Money";
 import { HashBox } from "@/components/ExplorerButton";
-import { useSession } from "@/features/auth/store";
-import { useAllocations } from "@/features/beneficiaries/hooks";
-import { currentAllocation } from "@/features/beneficiaries/status";
+import { useAllocations, useBeneficiaries } from "@/features/beneficiaries/hooks";
 import { useLedger } from "@/features/ledger/hooks";
 import { usePublishCampaign } from "@/features/campaigns/hooks";
 import { CampaignPicker, useSelectedCampaign } from "@/features/campaigns/components/CampaignPicker";
 import { useBatchPayout, useCancelAllocation, type PayoutItem } from "@/features/disbursements/hooks";
-import { PAYMENT_STATUS, canCancel, canPay } from "@/features/disbursements/status";
+import { ALLOCATION_FILTERS, PAYMENT_STATUS, canCancel, canPay } from "@/features/disbursements/status";
 import { FundDialog } from "@/features/disbursements/components/FundDialog";
 import { BatchDialog } from "@/features/disbursements/components/BatchDialog";
 
 const AMOUNT = /^\d+(\.\d{1,7})?$/;
+const PAGE = 20;
+const AWAITING: Allocation["status"][] = ["allocated", "ready", "failed"];
 
 interface Row {
 	beneficiary: Beneficiary;
@@ -44,33 +42,46 @@ interface Row {
  * each USDC allocation, review, then "Execute payment" runs Allocate → Lock → Pay (one wallet signature to lock each
  * group of up to 20, then one per payout). Amounts are checked against the campaign maximum and available funds here
  * and again by the backend. An existing allocation's amount is fixed: cancel it to change it.
+ *
+ * The list is paged (backend guide: `?status=approved&allocation=none&limit=20`, never every approved beneficiary at
+ * once, since each name loaded is access-logged). Selections are kept across pages. Pay and cancel need the
+ * allocation id, which comes from the allocations list (no names) by the row's ALC- reference.
  */
 export function FundAllocation({ reference }: { reference?: string }) {
 	const toast = useToast();
-	const token = useSession((s) => s.accessToken);
 	const campaigns = useSelectedCampaign(reference);
 	const campaign = campaigns.selected;
 	const ref = campaign?.reference ?? "";
-	const approved = useQuery({
-		queryKey: ["beneficiaries", ref, { status: "approved", all: true }],
-		queryFn: () => listAllBeneficiaries(api, ref, "approved"),
-		enabled: !!token && !!campaign,
+	const [filter, setFilter] = useState<(typeof ALLOCATION_FILTERS)[number]["value"]>("none");
+	const [search, setSearch] = useState("");
+	const query = useDeferredValue(search.trim());
+	const [offset, setOffset] = useState(0);
+	const approved = useBeneficiaries(campaign?.reference, {
+		status: "approved",
+		allocation: filter || undefined,
+		search: query || undefined,
+		limit: PAGE,
+		offset,
 	});
 	const allocations = useAllocations(campaign?.reference);
 	const latest = useLedger({ campaign: campaign?.reference, type: "disbursement", status: "confirmed", limit: 1 }, !!campaign);
 	const batch = useBatchPayout(ref);
 	const cancel = useCancelAllocation(ref);
 	const publish = usePublishCampaign();
-	const [selected, setSelected] = useState<Set<string>>(new Set());
+	const [selected, setSelected] = useState<Map<string, Row>>(new Map());
 	const [amounts, setAmounts] = useState<Record<string, string>>({});
 	const [funding, setFunding] = useState(false);
 	const [batchOpen, setBatchOpen] = useState(false);
 	const [cancelling, setCancelling] = useState<string | null>(null);
 
-	const rows: Row[] = (approved.data ?? []).map((beneficiary) => {
-		const allocation = currentAllocation(allocations.data, beneficiary.id);
-		return { beneficiary, allocation, status: allocation?.status ?? "pending_allocation" };
+	const byReference = new Map((allocations.data ?? []).map((a) => [a.reference, a]));
+	const rows: Row[] = (approved.data?.results ?? []).map((beneficiary) => {
+		const allocation = beneficiary.allocation ? (byReference.get(beneficiary.allocation.reference) ?? null) : null;
+		return { beneficiary, allocation, status: beneficiary.allocation?.status ?? "pending_allocation" };
 	});
+	/** A row with an allocation can only be paid or cancelled once its id is known. */
+	const actionable = (r: Row) => canPay(r.status) && (!r.beneficiary.allocation || !!r.allocation);
+	const awaiting = (allocations.data ?? []).filter((a) => AWAITING.includes(a.status)).length;
 	const max = campaign ? BigInt(campaign.max_allocation) : 0n;
 	const defaultAmount = (r: Row) =>
 		fixed2(r.allocation ? r.allocation.amount : (campaign?.max_allocation ?? "0")).replace(/,/g, "");
@@ -83,8 +94,9 @@ export function FundAllocation({ reference }: { reference?: string }) {
 		return null;
 	};
 
-	const payable = rows.filter((r) => canPay(r.status));
-	const chosen = payable.filter((r) => selected.has(r.beneficiary.id));
+	const pagePayable = rows.filter(actionable);
+	const pageChosen = pagePayable.filter((r) => selected.has(r.beneficiary.id));
+	const chosen = [...selected.values()];
 	const selectedTotal = chosen.reduce((sum, r) => sum + (amountError(r) ? 0n : toStroops(amountOf(r))), 0n);
 	const newTotal = chosen
 		.filter((r) => !r.allocation)
@@ -100,13 +112,19 @@ export function FundAllocation({ reference }: { reference?: string }) {
 			chosen.filter((r) => r.status === "pending_allocation" || r.status === "cancelled" || r.status === "allocated").length / 20,
 		) + chosen.length;
 
-	const toggle = (id: string, on: boolean) =>
+	const toggle = (list: Row[], on: boolean) =>
 		setSelected((s) => {
-			const next = new Set(s);
-			if (on) next.add(id);
-			else next.delete(id);
+			const next = new Map(s);
+			for (const r of list) {
+				if (on) next.set(r.beneficiary.id, r);
+				else next.delete(r.beneficiary.id);
+			}
 			return next;
 		});
+	const changeList = (apply: () => void) => {
+		apply();
+		setOffset(0);
+	};
 
 	const execute = async () => {
 		const items: PayoutItem[] = chosen.map((r) => ({
@@ -121,7 +139,7 @@ export function FundAllocation({ reference }: { reference?: string }) {
 		}));
 		setBatchOpen(true);
 		await batch.run(items);
-		setSelected(new Set());
+		setSelected(new Map());
 	};
 
 	const cancelRow = (r: Row) => {
@@ -144,8 +162,8 @@ export function FundAllocation({ reference }: { reference?: string }) {
 		<Checkbox
 			aria-label={`Select ${r.beneficiary.reference}`}
 			checked={selected.has(r.beneficiary.id)}
-			onCheckedChange={(on) => toggle(r.beneficiary.id, on === true)}
-			disabled={!canPay(r.status)}
+			onCheckedChange={(on) => toggle([r], on === true)}
+			disabled={!actionable(r)}
 		/>
 	);
 
@@ -154,10 +172,16 @@ export function FundAllocation({ reference }: { reference?: string }) {
 			key: "select",
 			header: (
 				<Checkbox
-					aria-label="Select all payable beneficiaries"
-					checked={payable.length > 0 && chosen.length === payable.length ? true : chosen.length ? "indeterminate" : false}
-					onCheckedChange={(on) => setSelected(on ? new Set(payable.map((r) => r.beneficiary.id)) : new Set())}
-					disabled={!payable.length}
+					aria-label="Select every payable beneficiary on this page"
+					checked={
+						pagePayable.length > 0 && pageChosen.length === pagePayable.length
+							? true
+							: pageChosen.length
+								? "indeterminate"
+								: false
+					}
+					onCheckedChange={(on) => toggle(pagePayable, on === true)}
+					disabled={!pagePayable.length}
 				/>
 			),
 			className: "w-12",
@@ -191,8 +215,8 @@ export function FundAllocation({ reference }: { reference?: string }) {
 							inputMode="decimal"
 							value={amountOf(r)}
 							onChange={(e) => setAmounts((a) => ({ ...a, [r.beneficiary.id]: e.target.value.replace(/[^\d.]/g, "") }))}
-							disabled={!canPay(r.status) || !!r.allocation}
-							title={r.allocation ? "Already allocated. Cancel the allocation to change the amount." : undefined}
+							disabled={!actionable(r) || !!r.beneficiary.allocation}
+							title={r.beneficiary.allocation ? "Already allocated. Cancel the allocation to change the amount." : undefined}
 							className={`h-8 w-[110px] rounded-control border bg-white px-2 text-xs tabular-nums outline-none focus:border-brand focus:ring-[3px] focus:ring-brand/15 disabled:border-transparent disabled:bg-transparent ${error ? "border-danger" : "border-line md:border-transparent md:hover:border-line"}`}
 						/>
 						{error && <span className="text-[11px] text-danger">{error}</span>}
@@ -212,7 +236,9 @@ export function FundAllocation({ reference }: { reference?: string }) {
 								{s.label}
 							</Chip>
 						</span>
-						{r.allocation && <span className="caption hidden font-mono xl:inline">{r.allocation.reference}</span>}
+						{r.beneficiary.allocation && (
+							<span className="caption hidden font-mono xl:inline">{r.beneficiary.allocation.reference}</span>
+						)}
 					</div>
 				);
 			},
@@ -223,7 +249,7 @@ export function FundAllocation({ reference }: { reference?: string }) {
 			mobile: "label",
 			className: "w-[92px]",
 			cell: (r) =>
-				canCancel(r.status) ? (
+				canCancel(r.status) && r.allocation ? (
 					<Button
 						variant="ghost"
 						size="sm"
@@ -345,7 +371,7 @@ export function FundAllocation({ reference }: { reference?: string }) {
 						className="animate-rise col-span-2 xl:col-span-1"
 						style={{ ["--i" as string]: 2 }}
 						label="Approved beneficiaries"
-						value={<CountUp value={payable.length} />}
+						value={<CountUp value={Math.max(0, t.beneficiaries_approved - t.beneficiaries_paid)} />}
 						caption="Waiting for allocation or payment"
 						tone="pollen"
 					/>
@@ -354,19 +380,53 @@ export function FundAllocation({ reference }: { reference?: string }) {
 
 			<div className="mt-8 grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,370px)]">
 				<section aria-labelledby="approved" className="min-w-0">
-					<h2 id="approved" className="h-section">
-						Approved beneficiaries
-					</h2>
-					<p className="caption mt-2">
-						Select recipients and enter their USDC allocation (max {campaign ? fixed2(campaign.max_allocation) : "—"} each).
-					</p>
+					<div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+						<div>
+							<h2 id="approved" className="h-section">
+								Approved beneficiaries
+							</h2>
+							<p className="caption mt-2">
+								Select recipients and enter their USDC allocation (max {campaign ? fixed2(campaign.max_allocation) : "—"} each).
+							</p>
+						</div>
+						<div className="flex flex-col gap-2 sm:flex-row">
+							<SearchInput
+								aria-label="Search by BNF reference or wallet"
+								placeholder="BNF reference or wallet"
+								value={search}
+								onChange={(e) => changeList(() => setSearch(e.target.value))}
+								className="sm:w-[220px]"
+							/>
+							<FilterSelect
+								label="Allocation"
+								value={filter}
+								onChange={(v) => changeList(() => setFilter(v as typeof filter))}
+								options={ALLOCATION_FILTERS}
+								className="sm:w-[190px]"
+							/>
+						</div>
+					</div>
+					{filter === "none" && awaiting > 0 && (
+						<Notice
+							tone="info"
+							title={`${awaiting} allocation${awaiting === 1 ? "" : "s"} waiting for payment`}
+							className="mt-4"
+							action={
+								<Button size="sm" variant="outline" onClick={() => changeList(() => setFilter("allocated"))}>
+									Show them
+								</Button>
+							}
+						>
+							Allocated, locked and failed payouts aren&apos;t in this view. Pay, retry or cancel them from the allocated list.
+						</Notice>
+					)}
 					<DataTable
 						className="mt-4"
 						caption="Approved beneficiaries"
 						columns={columns}
 						rows={approved.data && allocations.data ? rows : undefined}
 						rowKey={(r) => r.beneficiary.id}
-						isLoading={approved.isPending || allocations.isPending}
+						isLoading={approved.isFetching || allocations.isPending}
 						error={listError}
 						onRetry={() => {
 							void approved.refetch();
@@ -375,20 +435,40 @@ export function FundAllocation({ reference }: { reference?: string }) {
 						rowClassName={(r) => (selected.has(r.beneficiary.id) ? "bg-page" : undefined)}
 						empty={
 							<EmptyState
-								title="No approved beneficiaries"
+								title={
+									query
+										? "No beneficiaries match"
+										: filter === "none"
+											? "Everyone approved is allocated"
+											: filter === "allocated"
+												? "No allocations yet"
+												: "No approved beneficiaries"
+								}
+								icon={query ? "search" : "inbox"}
 								action={
 									<Button asChild size="sm" variant="outline">
 										<Link href={routes.BENEFICIARIES({ campaign: campaign?.reference })}>Review beneficiaries</Link>
 									</Button>
 								}
 							>
-								Approve beneficiaries on the registration screen and they&apos;ll appear here, ready for allocation.
+								{query
+									? "Search matches the start of a BNF reference or wallet address, not names."
+									: "Approve beneficiaries on the registration screen and they'll appear here, ready for allocation."}
 							</EmptyState>
 						}
 					/>
-					{approved.data && rows.length > 0 && (
-						<p className="mt-4 text-xs">
-							{chosen.length} of {payable.length} beneficiaries selected
+					{approved.data && <Pagination total={approved.data.total} limit={PAGE} offset={offset} onPage={setOffset} />}
+					{chosen.length > 0 && (
+						<p className="mt-4 flex items-center gap-3 text-xs">
+							{chosen.length} beneficiar{chosen.length === 1 ? "y" : "ies"} selected
+							{chosen.length > pageChosen.length && <span className="caption">(including other pages)</span>}
+							<button
+								type="button"
+								className="cursor-pointer text-brand-dark hover:underline"
+								onClick={() => setSelected(new Map())}
+							>
+								Clear
+							</button>
 						</p>
 					)}
 				</section>

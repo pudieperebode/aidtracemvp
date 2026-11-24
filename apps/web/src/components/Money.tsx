@@ -15,7 +15,9 @@ export function CountUpUsd({ stroops, cents = false }: { stroops: string | bigin
 	return (
 		<AnimatedNumber
 			value={whole}
-			format={(n) => `$${n.toLocaleString("en-US", { minimumFractionDigits: showCents ? 2 : 0, maximumFractionDigits: showCents ? 2 : 0 })}`}
+			format={(n) =>
+				`$${n.toLocaleString("en-US", { minimumFractionDigits: showCents ? 2 : 0, maximumFractionDigits: showCents ? 2 : 0 })}`
+			}
 		/>
 	);
 }

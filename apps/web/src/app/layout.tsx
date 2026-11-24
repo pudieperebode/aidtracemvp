@@ -8,7 +8,8 @@ import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_NAME, SITE_TAGLINE, SITE_URL, THE
 import "./globals.css";
 
 const TITLE = `${SITE_NAME} · ${SITE_TAGLINE}`;
-const SHARE = "Fund communities and follow every USDC: verified campaigns, approved beneficiaries and payouts you can check on Stellar.";
+const SHARE =
+	"Fund communities and follow every USDC: verified campaigns, approved beneficiaries and payouts you can check on Stellar.";
 
 /**
  * App metadata. Icons, social cards and the manifest come from file conventions in this folder (icon.svg,

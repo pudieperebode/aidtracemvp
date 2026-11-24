@@ -47,6 +47,11 @@ export const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve,
 /** A delay scaled by the chosen speed, with a little jitter. */
 export function latency(kind: "read" | "write" | "sign" | "ledger") {
 	const realistic = useMockControls.getState().speed === "realistic";
-	const base = { read: realistic ? 450 : 160, write: realistic ? 700 : 260, sign: realistic ? 1600 : 700, ledger: realistic ? 4500 : 1300 }[kind];
+	const base = {
+		read: realistic ? 450 : 160,
+		write: realistic ? 700 : 260,
+		sign: realistic ? 1600 : 700,
+		ledger: realistic ? 4500 : 1300,
+	}[kind];
 	return wait(base * (0.8 + Math.random() * 0.4));
 }

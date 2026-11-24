@@ -118,6 +118,9 @@ export const toBeneficiary = (b: BeneficiaryDto): Beneficiary => ({
 	wallet: b.walletAddress,
 	status: b.status,
 	eligibility_status: b.eligibilityStatus,
+	allocation: b.allocation
+		? { reference: b.allocation.reference, amount: stroops(b.allocation.amount), status: b.allocation.status }
+		: null,
 	reviewed_at: unixOrNull(b.reviewedAt),
 	created_at: unix(b.createdAt),
 });

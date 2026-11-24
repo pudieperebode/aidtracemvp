@@ -180,6 +180,8 @@ export interface BeneficiaryDto {
 	walletAddress: string;
 	/** In the organization list only. Each name shown is logged. */
 	fullName?: string;
+	/** In the organization list only. Null when there is no live or paid allocation. */
+	allocation?: { reference: string; amount: string; status: AllocationStatusDto } | null;
 	status: ApplicationStatusDto;
 	eligibilityStatus: "pending" | "eligible" | "ineligible";
 	reviewedAt: string | null;

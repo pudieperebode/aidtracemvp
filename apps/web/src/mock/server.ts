@@ -166,12 +166,15 @@ const orgDto = (o: OrgRow): OrganizationDto => ({
 	adminWallet: o.adminWallet,
 });
 
-/** `withName`: the organization's list includes the name (the real backend logs each one it returns). */
-const beneficiaryDto = (b: BeneficiaryRow, withName = false): BeneficiaryDto => ({
+/**
+ * `list`: the organization's list adds the name (the real backend logs each one it returns) and the live or paid
+ * allocation.
+ */
+const beneficiaryDto = (b: BeneficiaryRow, list?: MockDb): BeneficiaryDto => ({
 	id: b.id,
 	reference: b.reference,
 	walletAddress: b.walletAddress,
-	...(withName && { fullName: b.fullName }),
+	...(list && { fullName: b.fullName, allocation: allocationSummary(list, b.id) }),
 	status: b.status,
 	eligibilityStatus: b.status === "approved" ? "eligible" : b.status === "rejected" ? "ineligible" : "pending",
 	reviewedAt: b.reviewedAt,
@@ -196,6 +199,11 @@ const beneficiaryDetailDto = (b: BeneficiaryRow): BeneficiaryDetailDto => ({
 		createdAt: e.createdAt,
 	})),
 });
+
+function allocationSummary(db: MockDb, beneficiaryId: string) {
+	const a = liveAllocation(db, beneficiaryId);
+	return a ? { reference: a.reference, amount: dec(a.amount), status: a.status } : null;
+}
 
 function allocationDto(db: MockDb, a: AllocationRow): AllocationDto {
 	const b = db.beneficiaries.find((x) => x.id === a.beneficiaryId);
@@ -938,12 +946,21 @@ const routes: [string, RegExp, Handler][] = [
 		(req, [ref], db) => {
 			const c = campaignFor(db, ref!, signedIn(req));
 			const status = str(req.params.status);
+			const allocation = str(req.params.allocation);
+			const search = str(req.params.search)?.trim().toUpperCase();
+			if (allocation && allocation !== "none" && allocation !== "allocated")
+				throw new HttpError(400, "VALIDATION_FAILED", "Check the highlighted fields.", [
+					{ field: "allocation", message: "allocation must be one of: none, allocated" },
+				]);
 			let list = db.beneficiaries.filter((b) => b.campaignReference === c.reference);
 			if (status) list = list.filter((b) => b.status === status);
+			if (allocation) list = list.filter((b) => !liveAllocation(db, b.id) === (allocation === "none"));
+			// Prefix match on reference or wallet only: names are stored encrypted.
+			if (search) list = list.filter((b) => b.reference.startsWith(search) || b.walletAddress.startsWith(search));
 			list = [...list].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 			return ok(
 				page(
-					list.map((b) => beneficiaryDto(b, true)),
+					list.map((b) => beneficiaryDto(b, db)),
 					req.params,
 				),
 			);

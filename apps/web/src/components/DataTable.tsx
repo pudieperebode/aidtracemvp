@@ -76,9 +76,16 @@ export function DataTable<T>({
 							</thead>
 							<tbody>
 								{rows.map((row, r) => (
-									<tr key={rowKey(row)} className={cn("group transition-colors hover:bg-page/70", rowClassName?.(row))} style={{ ["--i" as string]: r }}>
+									<tr
+										key={rowKey(row)}
+										className={cn("group transition-colors hover:bg-page/70", rowClassName?.(row))}
+										style={{ ["--i" as string]: r }}
+									>
 										{columns.map((col) => (
-											<td key={col.key} className={cn("h-[50px] border-b border-line px-3 align-middle group-last:border-0", col.className)}>
+											<td
+												key={col.key}
+												className={cn("h-[50px] border-b border-line px-3 align-middle group-last:border-0", col.className)}
+											>
 												{col.cell(row)}
 											</td>
 										))}
@@ -121,7 +128,17 @@ export function DataTable<T>({
 }
 
 /** "Showing 1–8 of 128 results" + Previous / numbered pages / › (Figma pagination). */
-export function Pagination({ total, limit, offset, onPage }: { total: number; limit: number; offset: number; onPage: (offset: number) => void }) {
+export function Pagination({
+	total,
+	limit,
+	offset,
+	onPage,
+}: {
+	total: number;
+	limit: number;
+	offset: number;
+	onPage: (offset: number) => void;
+}) {
 	if (total === 0) return null;
 	const pages = Math.max(1, Math.ceil(total / limit));
 	const current = Math.floor(offset / limit) + 1;
@@ -129,7 +146,8 @@ export function Pagination({ total, limit, offset, onPage }: { total: number; li
 	const to = Math.min(total, offset + limit);
 	const windowStart = Math.max(1, Math.min(current - 1, pages - 2));
 	const visible = Array.from({ length: Math.min(3, pages) }, (_, i) => windowStart + i);
-	const btn = "flex h-[34px] min-w-[30px] cursor-pointer items-center justify-center rounded-control bg-white px-3 text-xs transition-colors hover:bg-field disabled:cursor-default disabled:opacity-40 disabled:hover:bg-white";
+	const btn =
+		"flex h-[34px] min-w-[30px] cursor-pointer items-center justify-center rounded-control bg-white px-3 text-xs transition-colors hover:bg-field disabled:cursor-default disabled:opacity-40 disabled:hover:bg-white";
 
 	return (
 		<nav aria-label="Pagination" className="mt-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
@@ -151,7 +169,13 @@ export function Pagination({ total, limit, offset, onPage }: { total: number; li
 						{p}
 					</button>
 				))}
-				<button type="button" className={btn} disabled={current === pages} onClick={() => onPage(offset + limit)} aria-label="Next page">
+				<button
+					type="button"
+					className={btn}
+					disabled={current === pages}
+					onClick={() => onPage(offset + limit)}
+					aria-label="Next page"
+				>
 					›
 				</button>
 			</div>

@@ -160,8 +160,18 @@ export interface Beneficiary {
 	wallet: Address;
 	status: BeneficiaryStatus;
 	eligibility_status: "pending" | "eligible" | "ineligible";
+	/** The live or paid allocation (organization list only). Null when there is none (a cancelled one doesn't count). */
+	allocation: BeneficiaryAllocation | null;
 	reviewed_at: Timestamp | null;
 	created_at: Timestamp;
+}
+
+/** The allocation summary on a beneficiary row. It has no id: pay and cancel look it up in the allocations list. */
+export interface BeneficiaryAllocation {
+	/** "ALC-…" */
+	reference: string;
+	amount: Stroops;
+	status: AllocationStatus;
 }
 
 export interface EvidenceFile {

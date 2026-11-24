@@ -1,5 +1,5 @@
 import type { ChipTone } from "@repo/ui/surface";
-import type { Allocation, Beneficiary, BeneficiaryStage } from "@repo/stellar/campaign";
+import type { Beneficiary, BeneficiaryStage } from "@repo/stellar/campaign";
 
 /** Deliverable 1 "Recommended approval workflow", with the design's chip colours. The only place this copy lives. */
 export const BENEFICIARY_STATUS: Record<BeneficiaryStage, { label: string; tone: ChipTone; meaning: string }> = {
@@ -20,24 +20,18 @@ export const BENEFICIARY_FILTERS: { value: string; label: string }[] = [
 	{ value: "rejected", label: "Rejected" },
 ];
 
-const LIVE: Allocation["status"][] = ["allocated", "ready", "processing", "failed"];
-
-/** The beneficiary's live (or paid) allocation, newest first. Cancelled ones don't count. */
-export const currentAllocation = (allocations: Allocation[] | undefined, beneficiaryId: string) =>
-	allocations?.find((a) => a.beneficiary_id === beneficiaryId && (a.status === "confirmed" || LIVE.includes(a.status))) ?? null;
-
-/** What the chip shows. "Paid" only from a backend-confirmed payout. */
-export function stageOf(b: Beneficiary, allocation: Allocation | null): BeneficiaryStage {
-	if (b.status !== "approved" || !allocation) return b.status;
-	return allocation.status === "confirmed" ? "paid" : "allocated";
+/** What the chip shows, from the row's own allocation. "Paid" only from a backend-confirmed payout. */
+export function stageOf(b: Beneficiary): BeneficiaryStage {
+	if (b.status !== "approved" || !b.allocation) return b.status;
+	return b.allocation.status === "confirmed" ? "paid" : "allocated";
 }
 
 /**
  * Review actions by state (`registered → start review → under review → approve | reject`; a decision can be reopened
  * while the beneficiary has no live or paid allocation).
  */
-export const reviewActions = (b: Beneficiary, allocation: Allocation | null) => ({
+export const reviewActions = (b: Beneficiary) => ({
 	startReview: b.status === "registered",
 	decide: b.status === "under_review",
-	reopen: (b.status === "approved" || b.status === "rejected") && !allocation,
+	reopen: (b.status === "approved" || b.status === "rejected") && !b.allocation,
 });

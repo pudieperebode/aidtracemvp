@@ -1,32 +1,32 @@
 # Testing
 
-PRD §8 "Smart Contract Testing & Validation". Where each scenario is covered:
+PRD §8 scenarios. There is no smart contract: authorization, accounting and duplicate protection are enforced by the
+backend (separate repo) and mirrored by this repo's mock backend, so the frontend flows can be tested end to end.
 
 | # | Scenario | Expected | Covered by |
 |---|---|---|---|
-| 1 | Create campaign | Campaign registered | contract `s01`, backend, web flow |
-| 2 | Register beneficiary | Record created | backend, web flow |
-| 3 | Approve eligible beneficiary | Approval recorded | backend, web flow |
-| 4 | Fund campaign with testnet USDC | Balance updated | contract `s04`, web flow |
-| 5 | Allocate to approved beneficiary | Allocation recorded | contract `s05` |
-| 6 | Allocate to unapproved beneficiary | Rejected | backend (approval check) + contract `s06` (admin auth) |
-| 7 | Execute authorized payout | Beneficiary receives funds | contract `s07`, web flow |
-| 8 | Unauthorized payout | Rejected | contract `s08` |
-| 9 | Insufficient campaign balance | Payment blocked | contract `s09` |
-| 10 | Duplicate disbursement | Rejected | contract `s10` |
-| 11 | Invalid payout amount | Rejected | contract `s11`, web schema |
-| 12 | Failed token transfer | State consistent | contract `s12` |
-| 13 | Multiple beneficiary payouts | Correct balances | contract `s13` |
-| 14 | Verify transaction history | Matches on-chain | contract `s14`, backend indexer |
-| 15 | Generate public financial report | Accurate totals | backend, `features/reports/csv.ts` |
-| 16 | Access protected beneficiary data without auth | Denied | backend |
+| 1 | Create campaign | Campaign registered | backend, web flow (E2E) |
+| 2 | Register beneficiary | Record created | backend, web flow (E2E) |
+| 3 | Approve eligible beneficiary | Approval recorded | backend, web flow (E2E) |
+| 4 | Fund campaign with testnet USDC | Balance updated | backend, web flow (E2E) |
+| 5 | Allocate to approved beneficiary | Allocation recorded | backend, web flow (E2E) |
+| 6 | Allocate to unapproved beneficiary | Rejected | backend (approval check), mock |
+| 7 | Execute authorized payout | Beneficiary receives funds | backend, web flow (E2E) |
+| 8 | Unauthorized payout | Rejected | backend (wallet signature + admin role) |
+| 9 | Insufficient campaign balance | Payment blocked | backend, web (available-funds check) |
+| 10 | Duplicate disbursement | Rejected | backend (`ALREADY_PAID`), mock |
+| 11 | Invalid payout amount | Rejected | backend, web schema |
+| 12 | Failed token transfer | State consistent | backend, web flow (E2E: failed transaction moves nothing) |
+| 13 | Multiple beneficiary payouts | Correct balances | web flow (E2E batch) |
+| 14 | Verify transaction history | Matches on-chain | backend reconciliation, admin console |
+| 15 | Generate public financial report | Accurate totals | backend CSV |
+| 16 | Access protected beneficiary data without auth | Denied | backend; admin console never shows names |
 
 ## Required evidence (PRD §8)
 
-Record here as they are produced: contract test output, funding and disbursement transaction hashes (Testnet),
-unauthorized / duplicate attempt results, frontend-to-contract integration runs, reconciliation results, public
-report validation, and known limitations.
+Record here as they are produced: funding and disbursement transaction hashes (Testnet), unauthorized / duplicate
+attempt results, frontend integration runs, reconciliation results, public report validation, and known limitations.
 
 ## Last run
 
-_None yet._
+_None recorded yet._

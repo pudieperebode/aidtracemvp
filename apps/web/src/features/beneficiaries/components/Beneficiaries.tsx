@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useDeferredValue, useState } from "react";
 import Link from "next/link";
 import { Check, RotateCcw, SearchCheck } from "lucide-react";
 import { Button } from "@repo/ui/button";
+import { SearchInput } from "@repo/ui/field";
 import { Chip } from "@repo/ui/surface";
 import { shortKey } from "@repo/stellar/format";
 import type { Beneficiary } from "@repo/stellar/campaign";
@@ -15,14 +16,8 @@ import { useToast } from "@/lib/use-toast";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable, FilterSelect, Pagination, type Column } from "@/components/DataTable";
 import { CardSkeleton, EmptyState, ErrorState } from "@/components/states";
-import { useAllocations, useBeneficiaries, useRegisterBeneficiary, useReviewBeneficiary } from "@/features/beneficiaries/hooks";
-import {
-	BENEFICIARY_FILTERS,
-	BENEFICIARY_STATUS,
-	currentAllocation,
-	reviewActions,
-	stageOf,
-} from "@/features/beneficiaries/status";
+import { useBeneficiaries, useRegisterBeneficiary, useReviewBeneficiary } from "@/features/beneficiaries/hooks";
+import { BENEFICIARY_FILTERS, BENEFICIARY_STATUS, reviewActions, stageOf } from "@/features/beneficiaries/status";
 import { BeneficiaryForm } from "@/features/beneficiaries/components/BeneficiaryForm";
 import { RecordDialog, RejectDialog } from "@/features/beneficiaries/components/ReviewDialogs";
 import { CampaignPicker, useSelectedCampaign } from "@/features/campaigns/components/CampaignPicker";
@@ -47,16 +42,20 @@ export function Beneficiaries({ reference }: { reference?: string }) {
 	const campaign = campaigns.selected;
 	const ref = campaign?.reference ?? "";
 	const [status, setStatus] = useState("");
+	const [search, setSearch] = useState("");
+	const query = useDeferredValue(search.trim());
 	const [offset, setOffset] = useState(0);
-	const list = useBeneficiaries(campaign?.reference, { status: status || undefined, limit: PAGE, offset });
-	const allocations = useAllocations(campaign?.reference);
+	const list = useBeneficiaries(campaign?.reference, {
+		status: status || undefined,
+		search: query || undefined,
+		limit: PAGE,
+		offset,
+	});
 	const register = useRegisterBeneficiary(ref);
 	const review = useReviewBeneficiary(ref);
 	const [viewing, setViewing] = useState<Beneficiary | null>(null);
 	const [rejecting, setRejecting] = useState<Beneficiary | null>(null);
 	const [busy, setBusy] = useState<{ id: string; decision: ReviewDecision } | null>(null);
-
-	const allocationOf = (b: Beneficiary) => currentAllocation(allocations.data, b.id);
 
 	const decide = (b: Beneficiary, decision: ReviewDecision, note?: string) => {
 		setBusy({ id: b.id, decision });
@@ -90,7 +89,7 @@ export function Beneficiaries({ reference }: { reference?: string }) {
 			key: "status",
 			header: "Status",
 			cell: (b) => {
-				const stage = stageOf(b, allocationOf(b));
+				const stage = stageOf(b);
 				return (
 					<Chip key={stage} tone={BENEFICIARY_STATUS[stage].tone} className="animate-pop">
 						{BENEFICIARY_STATUS[stage].label}
@@ -117,7 +116,7 @@ export function Beneficiaries({ reference }: { reference?: string }) {
 			mobile: "label",
 			className: "w-[270px]",
 			cell: (b) => {
-				const can = reviewActions(b, allocationOf(b));
+				const can = reviewActions(b);
 				if (can.startReview)
 					return (
 						<Button
@@ -246,16 +245,28 @@ export function Beneficiaries({ reference }: { reference?: string }) {
 									Start a review, check the record and evidence, then approve or reject. Each name shown is access-logged.
 								</p>
 							</div>
-							<FilterSelect
-								label="Status"
-								value={status}
-								onChange={(v) => {
-									setStatus(v);
-									setOffset(0);
-								}}
-								options={BENEFICIARY_FILTERS}
-								className="sm:w-[180px]"
-							/>
+							<div className="flex flex-col gap-2 sm:flex-row">
+								<SearchInput
+									aria-label="Search by BNF reference or wallet"
+									placeholder="BNF reference or wallet"
+									value={search}
+									onChange={(e) => {
+										setSearch(e.target.value);
+										setOffset(0);
+									}}
+									className="sm:w-[240px]"
+								/>
+								<FilterSelect
+									label="Status"
+									value={status}
+									onChange={(v) => {
+										setStatus(v);
+										setOffset(0);
+									}}
+									options={BENEFICIARY_FILTERS}
+									className="sm:w-[180px]"
+								/>
+							</div>
 						</div>
 						<DataTable
 							className="mt-4"
@@ -268,10 +279,12 @@ export function Beneficiaries({ reference }: { reference?: string }) {
 							onRetry={() => list.refetch()}
 							empty={
 								<EmptyState
-									title={status ? "No beneficiaries match" : "No beneficiaries registered"}
-									icon={status ? "search" : "inbox"}
+									title={status || query ? "No beneficiaries match" : "No beneficiaries registered"}
+									icon={status || query ? "search" : "inbox"}
 								>
-									{status ? "Try another status." : "Register a beneficiary above, or share the campaign's application link."}
+									{status || query
+										? "Search matches the start of a BNF reference or wallet address, not names."
+										: "Register a beneficiary above, or share the campaign's application link."}
 								</EmptyState>
 							}
 						/>
@@ -283,7 +296,7 @@ export function Beneficiaries({ reference }: { reference?: string }) {
 			<RecordDialog
 				campaign={ref}
 				beneficiary={viewing}
-				stage={viewing ? stageOf(viewing, allocationOf(viewing)) : undefined}
+				stage={viewing ? stageOf(viewing) : undefined}
 				onOpenChange={(open) => !open && setViewing(null)}
 			/>
 			<RejectDialog

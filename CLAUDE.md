@@ -1,17 +1,18 @@
 # AidTrace
 
 Transparent aid distribution on Stellar. MVP, **Testnet only**: an organization creates a campaign → registers and
-approves beneficiaries → funds the campaign with testnet USDC → allocates → disburses through a Soroban contract →
+approves beneficiaries → funds the campaign with testnet USDC → allocates → disburses from escrow →
 donors verify everything on a public dashboard and ledger. PRD:
 https://docs.google.com/document/d/1uemEqHvXihY4wUw2ZCIvkfXQObdLTgFs2BeRYliUwHY. **Scope and status: `docs/PLAN.md`.
 Tests: `docs/TESTING.md`. Design (Figma frames per screen): `docs/DESIGN-PLAN.md`.** Structure mirrors the Stackly
 reference repo (github.com/stellardev002/stackly).
 
-**Architecture:** this repo holds the frontend and the Soroban contract. The backend (campaign metadata, protected
-beneficiary records, review workflow, contract indexing, reconciliation, notifications) is a separate repo. Until it
-exists the app runs on an **in-browser mock backend** (see "Data"). On-chain writes: the backend prepares a Soroban
-transaction, the administrator's wallet signs it, the app submits it, then reports the hash to the backend, which
-verifies it on chain before balances change.
+**Architecture:** this repo is frontend only. **No smart contracts here**: everything comes from the backend (separate
+repo: campaigns, protected beneficiary records, review workflow, escrow as Stellar claimable balances, settlement,
+reconciliation, notifications, platform administration). Never call it a smart contract or show a contract address.
+On-chain writes: the backend prepares a transaction, the wallet signs it unchanged, the app sends the signed XDR back
+to the backend, which submits it and reports the outcome. The apps can also run on an **in-browser mock backend**
+(see "Data").
 
 ## Monorepo
 
@@ -22,47 +23,48 @@ apps/landing/       (:3002) marketing site, PRD Screen 1 (Figma "AidTrace Deskto
 apps/web/           (:3000) the app, one shell (sidebar + header) for every screen:
                       public:  /overview, /campaigns, /campaigns/[reference] (+ /apply), /ledger
                       admin:   /campaigns/new, /beneficiaries, /allocation, /reports   (?campaign=REF picks the campaign)
-contracts/aidtrace/ Soroban contract scaffold (Rust): campaigns, USDC escrow, allocations, one-time payouts, events
+apps/admin/         (:3001) platform-admin console (backend `/admin/*`, wallets in ADMIN_WALLETS only):
+                      /, /users, /organizations, /campaigns (+ /[reference]), /beneficiaries, /allocations,
+                      /transactions, /escrow, /reconciliation, /logs
 packages/ui/        @repo/ui: design tokens, components, motion, brand, OG card
 packages/stellar/   @repo/stellar: network constants, assets, UI data model (campaign.ts), stroop maths, strkey
 packages/mock/      @repo/mock: deterministic demo seed + derived totals (used by the mock backend and the landing)
 packages/eslint-config, packages/typescript-config
 ```
 
-`pnpm dev` · `pnpm build` · `pnpm check-types` · `pnpm lint` · `pnpm format` (prettier: tabs, width 130) · contract:
-`cd contracts && cargo test` (see `contracts/README.md`).
+`pnpm dev` · `pnpm build` · `pnpm check-types` · `pnpm lint` · `pnpm format` (prettier: tabs, width 130).
 
 ## Deployment (Vercel Services)
 
-One Vercel project, routed by the root `vercel.json`: `/app` and `/app/*` → `apps/web`, everything else →
-`apps/landing`. `apps/web` sets `basePath: "/app"` on every Vercel build (`VERCEL` is set); set `APP_BASE_PATH=""`
-once the app has its own domain. Each app's `src/lib/site.ts` derives canonical URLs from
+One Vercel project, routed by the root `vercel.json`: `/app` and `/app/*` → `apps/web`, `/admin` and `/admin/*` →
+`apps/admin`, everything else → `apps/landing`. `apps/web` sets `basePath: "/app"` and `apps/admin` `basePath: "/admin"` on
+every Vercel build (`VERCEL` is set); set `APP_BASE_PATH=""` / `ADMIN_BASE_PATH=""` once they have their own domains.
+The apps share an origin, so persisted state uses separate keys (`aidtrace-session` vs `aidtrace-admin-session`). Each app's `src/lib/site.ts` derives canonical URLs from
 `VERCEL_PROJECT_PRODUCTION_URL`. Landing links into the app with plain `<a>`s (`APP_LINKS`) and redirects bare app
-paths to `/app/…`. Turborepo only passes declared env vars to builds: keep `VERCEL*`, `APP_BASE_PATH`,
+paths to `/app/…`. Turborepo only passes declared env vars to builds: keep `VERCEL*`, `APP_BASE_PATH`, `ADMIN_BASE_PATH`,
 `API_PROXY_TARGET`, `AIDTRACE_API_URL` and `NEXT_PUBLIC_*` in `turbo.json`.
 
 ## Stack
 
 Next.js 16 (App Router, React Compiler, Turbopack), React 19, Tailwind v4, Radix in `@repo/ui`, TanStack Query,
 zustand, react-hook-form + zod 4, axios, lucide, sonner, `@stellar/stellar-sdk`, `@creit.tech/stellar-wallets-kit`.
-Contract: Rust + `soroban-sdk`.
 
 ## Data (`apps/web/src/lib/api`, `apps/web/src/mock`)
 
 - **Mode** (`lib/mode.ts`): `NEXT_PUBLIC_DATA_MODE=mock` (default) or `live`. In mock mode both axios clients use
   `mock/adapter.ts`, which answers every route from `mock/server.ts` (an in-browser backend persisted in localStorage,
   seeded from `@repo/mock/seed`). Endpoints, flows, hooks and screens run the exact same code in both modes. The mock
-  enforces the backend + contract rules (admin-only routes, approval before allocation, max per beneficiary,
+  enforces the backend rules (admin-only routes, approval before allocation, max per beneficiary,
   available balance, no duplicate payouts, failed transactions that change no balances) and returns the same error
   envelope. Wallet signatures and Stellar submission are simulated in `mock/chain.ts`.
 - **Demo panel** (`mock/DemoPanel.tsx`, mock mode only): network speed (fast / realistic), fail the next transaction,
   decline the next signature, reset demo data. Admin sign-in uses the **demo administrator wallet**
   (`DEMO_ADMIN_WALLET`, `features/auth/components/SignInDialog.tsx`).
-- **API contract:** the live backend (`https://aidtrace-production.up.railway.app/docs`, JSON at `/docs-json`) and
+- **API contract:** the live backend (`https://api.aidtrace.africa/docs`, JSON at `/docs-json`) and
   `docs/FRONTEND_INTEGRATION (2).md`. Request bodies are typed in OpenAPI; most response bodies only in the guide.
   Shapes neither spells out are marked PROVISIONAL in `dto.ts`. When the API changes, update `dto.ts` + `adapters.ts`
   (+ paths) and keep `mock/server.ts` in step. Live mode: the browser calls `<basePath>/api/v1/*`, rewritten to
-  `API_PROXY_TARGET/v1/*`, so set `API_PROXY_TARGET=https://aidtrace-production.up.railway.app/api`.
+  `API_PROXY_TARGET/v1/*`, so set `API_PROXY_TARGET=https://api.aidtrace.africa/api`.
 - **Layers:** `dto.ts` → `adapters.ts` (→ `@repo/stellar/campaign`: snake_case, stroop strings, unix seconds) →
   `endpoints.ts` (reads) and `flows.ts` (writes). `publicApi` for public reads and the application form; `api` (bearer
   token, one shared refresh) for administrators.
@@ -74,9 +76,28 @@ Contract: Rust + `soroban-sdk`.
   (off-chain, ≤100) → Lock (signed, ≤20) → Pay (signed, one at a time). Hooks: `useOnChain` / `useFundCampaign` /
   `useCancelAllocation` / `useBatchPayout` (`features/disbursements/hooks.ts`). UI: `TxDialog` + `TxProgress`
   (`lib/tx.ts` stages). Signer: `features/wallet/signer.ts` (demo wallet or Stellar Wallets Kit). Mutations never retry.
+- **Beneficiary lists are always paged** (≤20 rows): each name returned is access-logged, so never fetch every
+  beneficiary. Rows carry `allocation {reference, amount, status} | null`; filter with `allocation=none|allocated` and
+  `search` (prefix of `BNF-…` or wallet, never names). Pay/cancel need the allocation id: look it up in the allocations
+  list (no names) by `ALC-` reference.
 - **References:** campaigns `AT-…` (every campaign route is keyed by reference), beneficiaries `BNF-…`, allocations
   `ALC-…` (the only recipient identifier on the public ledger). Errors: branch on `error.code` (`lib/api/errors.ts`).
 - **Amounts** are stroop strings; never float maths (`@repo/stellar/money`, `lib/format.ts`: `usd`, `fixed2`, `usdc`).
+
+## Admin console (`apps/admin`)
+
+- Same stack, tokens, shell pattern (header + 208px sidebar, drawer below `lg`), `DataTable` / states as `apps/web`
+  (copied, not shared; extracting a shared app package is a follow-up). Gate: wallet sign-in, then `GET /auth/me`
+  `roles.platformAdmin`; a 403 means no access (`features/auth/components/PlatformGate.tsx`).
+- Platform admins can't sign, move funds, approve beneficiaries or read beneficiary names, contacts or evidence. Never
+  build screens that assume they can. Writes: suspend (reason, confirmed) / reactivate, feature, reconcile, re-check a
+  transaction, run the settlement sweep, resolve an issue (note). `unexpected_claim` issues are critical.
+- `/admin/*` response bodies are undocumented (OpenAPI says `object`): `lib/api/dto.ts` is PROVISIONAL, screens read
+  fields through `pick()` with fallbacks (`features/admin/values.tsx`) and every record opens in full (`RecordView`).
+  Tighten the DTOs once real responses are seen.
+- Mock mode: `src/mock` (own localStorage key) answers sign-in and every `/admin` route from the shared seed plus
+  admin-only rows (`mock/state.ts`). `DEMO_PLATFORM_WALLET` is the only platform admin; the organization demo wallet
+  gets "No platform access".
 
 ## Domain rules (PRD)
 
@@ -85,7 +106,7 @@ Contract: Rust + `soroban-sdk`.
   Rejected · Allocated · Paid; payment Pending · Allocated · Ready · Processing · Paid · Failed · Cancelled; ledger
   Donation / Payment × Pending · Processing · Completed (Paid for payouts) · Failed.
 - **A UI status is never proof of payment.** "Paid"/balances come from backend-verified chain data.
-- **Privacy:** public screens, CSVs and the contract use beneficiary references only (`BNF-00042`). Names and evidence
+- **Privacy:** public screens and CSVs use beneficiary references only (`BNF-00042`). Names and evidence
   exist only on `BeneficiaryRecord` (admin). Always state that on-chain transfers and wallets are publicly observable.
 
 ## Design system (`packages/ui`)
